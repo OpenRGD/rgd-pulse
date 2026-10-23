@@ -1,0 +1,10 @@
+target/
+**/target/
+**/*.uf2
+**/*.elf
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+.vscode/

@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/pulse-protocol",
+  "crates/pulse-core",
+  "crates/pulse-bridge"
+]
+exclude = ["firmware/pico-w"]

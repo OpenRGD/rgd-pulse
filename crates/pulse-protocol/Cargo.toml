@@ -1,0 +1,8 @@
+[package]
+name = "pulse-protocol"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Minimal no_std CRC-checked diagnostic frame for OpenRGD Pulse"
+
+[dependencies]
