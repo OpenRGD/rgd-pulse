@@ -1,0 +1,19 @@
+name: Pico firmware compile
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+jobs:
+  pico:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware/pico-w
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+      - name: Check RP2040 firmware
+        run: cargo check --release

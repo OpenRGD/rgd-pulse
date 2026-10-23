@@ -1,0 +1,19 @@
+[package]
+name = "pulse-pico-w"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+embassy-rp = { version = "0.3", features = ["rp2040", "critical-section-impl"] }
+rp2040-boot2 = "0.3"
+
+[profile.release]
+debug = 2
+lto = true
+codegen-units = 1
+opt-level = "s"
