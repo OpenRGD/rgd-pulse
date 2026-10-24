@@ -187,7 +187,10 @@ mod tests {
         view.observe(s, 5000).unwrap();
         assert_eq!(view.status(5000), ImuStatus::FreshSensorAxes);
         assert_eq!(view.observed_age_ms(5099), Some(149));
-        assert_eq!(view.sample().unwrap().frame_quality, FrameQuality::SensorAxesUnverified);
+        assert_eq!(
+            view.sample().unwrap().frame_quality,
+            FrameQuality::SensorAxesUnverified
+        );
     }
 
     #[test]
