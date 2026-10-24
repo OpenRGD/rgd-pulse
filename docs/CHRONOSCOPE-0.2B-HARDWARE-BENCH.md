@@ -2,10 +2,26 @@
 
 **Status:** firmware candidate compiled in CI; this document is a physical operator acceptance procedure, NOT a report of completed hardware tests. Do not confuse 0.1C hardware successes with 0.2B physical evidence.
 
+## Operator physical bring-up and 180° correction — 2026-10-24
+
+**Operator-reported PULSE-0.2B first flash:** OPENRGD splash appeared briefly, then the graphical pages and charts rendered. K1–K4 page buttons reportedly worked correctly. **Observed defect:** graphics were rotated **180° upside-down** relative to the intended front view (joystick LEFT, K1–K4 RIGHT). Do not call the first-flash visual orientation a pass. Physical joystick directions, graph focus/zoom, exact colors/pixel offsets and post-0.2B USB ACK regressions were not separately reported at this stage.
+
+**Minimal source fix:** changed `firmware/pico-w/src/lcd.rs` ST7735S `MADCTL_LANDSCAPE_CANDIDATE` from `0xA0` (`MY|MV`) to **`0x60` (`MX|MV`)**. The two landscape settings differ by a 180° display rotation. There are **no changes** to K1–K4 GPIOs, landscape joystick mapping, 128×128 framebuffer, Somatic/demo data, USB CDC or ACK handling.
+
+**Status after fix:** new firmware candidate; **not yet physically re-flashed or verified**. The panel memory offsets remain provisional (X=2, Y=3), and physical clipping/color order still require confirmation.
+
+### Short acceptance run for correction
+
+1. Pull the new `feat/pulse-0.2b-chronoscope-four-pages` HEAD, build/flash the UF2 using the instructions below. Do **not** rotate the physical board a second time.
+2. Hold the board with joystick on **LEFT** and buttons **RIGHT**. Confirm the OPENRGD splash, SOMATIC headings, charts and footers are upright. Verify labels are **not mirrored** and none are cut off at the panel edges.
+3. Press K1, K2, K3, K4, and then joystick UP/DOWN/LEFT/RIGHT/CLICK in their actual operator-facing directions; K keys worked in the previous flash, but logical joystick axis mapping has not yet been physically evidenced.
+4. On K1 SOMATIC, click the joystick, then UP twice: `ZOOM x1 -> x2 -> x4`; CLICK closes the focus.
+5. If the orientation is correct, run the existing read-only 20/100-frame USB synthetic tests (no motors). Capture any new display clipping or color issues.
+
 ## Changes compared with verified 0.1C
 
 - Native display target **128×128 pixels**; physically mount/hold entire Seengreat Rev 1.2 PCB 90° clockwise from vendor upright orientation: **joystick LEFT / K1..K4 RIGHT**.
-- Inverse landscape ST7735S MADCTL candidate `0xA0` (MY|MV), with provisional X/Y offsets (2,3). Physical orientation, panel borders and RGB/BGR must be validated; do not assume correct based on successful firmware compilation.
+- Corrected landscape ST7735S MADCTL candidate **`0x60` (MX|MV)** after the first real 0.2B flash displayed inverted graphics with `0xA0` (MY|MV); X/Y offsets (2,3) are still provisional. The corrected orientation has **not yet** been tested physically; panel borders and RGB/BGR still need verification.
 - **Hardware SPI0 8MHz** on GP6/GP7 for RGB565 full-frame transfer. One 32KiB framebuffer with bounded, explicit redraws. UI rendering is independent of the read-only USB CDC ACK bridge.
 - **USB initialization before LCD boot effects**; timer-based LCD reset/SLPOUT delays instead of long blocking CPU spins. Intended to help the earlier >5s USB startup lag, but only a fresh kernel timing trial can verify an improvement.
 - Four direct K-page selectors + local joystick **focus and zoom**. No joystick action sends a robot command.
@@ -102,5 +118,5 @@ Required result: 3/3 new HELLO handshakes, 60/60 ACK, 100/100 additional ACK, ze
 1. **None of the four application telemetry feeds is connected yet.** Real Somatic timing requires separately reviewed read-only runtime instrumentation. Real Chronons require source-linked Chronograph/HyperAion API; no invented decisions. Real IMU must be fanned out from Paky-01's existing read-only publisher, not by reopening its CH340 serial device; physical extrinsics and absolute yaw still uncalibrated. Motor count is a BHL reference, not real online inventory; drive voltage unknown.
 2. Full framebuffer at 8MHz SPI0 is an intentional MVP tradeoff; subsequent wave can implement dirty rectangles and DMA if physical refresh latency/USB ACK performance warrants it.
 3. Explicitly synthetic charts are deterministic preview shapes, not measurement history. The UI can zoom and pan their plotted sampling range; host time series can be supplied later over a separately versioned telemetry UI contract.
-4. ST7735S rotation `0xA0`, RAM offsets and color palette are **firmware candidates**; physical screen needs approval. As yet no physical 0.2B test evidence exists.
+4. Initial 0.2B firmware physically displayed the splash/pages/charts and K-buttons responded, but `0xA0` rendered upside-down. The new `0x60` orientation, RAM offsets and color palette remain **unverified corrections/candidates** and need another physical check.
 5. Production must use a legitimate USB VID/PID and per-device serial number; prototype identification alone is not unique.
