@@ -194,8 +194,8 @@ fn serial_demo(path: &str, count: u32) -> Result<(), Box<dyn std::error::Error>>
 
         // Cap the send rate at 10Hz; a delayed ACK slows transmission rather
         // than overflowing the Pico's small CDC endpoint buffers.
-        if let Some(wait) = (sent_at + Duration::from_millis(100))
-            .checked_duration_since(Instant::now())
+        if let Some(wait) =
+            (sent_at + Duration::from_millis(100)).checked_duration_since(Instant::now())
         {
             thread::sleep(wait);
         }
