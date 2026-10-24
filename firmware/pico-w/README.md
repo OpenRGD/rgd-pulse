@@ -34,6 +34,23 @@ To recheck the mapping, **hold K1 + K4 for about 1.2 seconds** to enter a *local
 
 See [PULSE-0.2C INPUT LAB BENCH](../../docs/PULSE-0.2C-INPUT-LAB-BENCH.md) for a reproducible five-direction test and a concise report format. This mode sends **no hardware, CAN or actuator commands**, and has no remote USB control endpoints.
 
+## PULSE-0.2D.3 — Color Lab (diagnostic candidate)
+
+**Physical issue reported 2026-10-24:** the large literal green / white / red bars in the ITALIA skin appeared **magenta / black / yellow**. Those three colors fit a combination of **display inversion** and **R/B channel swap**. This does not prove a broken display: on this ST7735S, the current software config is **`MADCTL=0x60` + `INVON=0x21`**, a hardware-calibration candidate inherited from early bench firmware.
+
+### Test all 4 combinations with one flash
+
+Hold **K1+K2 for >=1.2s** to enter `RGD / COLOR LAB`. Three large literal RGB565 blocks request **G / W / R**. Tap joystick RIGHT to cycle:
+
+1. `INV / RGB`: `MADCTL=0x60`, `INVON=0x21` (old/default).
+2. `NORM / RGB`: `MADCTL=0x60`, `INVOFF=0x20`.
+3. `INV / BGR`: `MADCTL=0x68`, `INVON=0x21`.
+4. `NORM / BGR`: `MADCTL=0x68`, `INVOFF=0x20` (**strong hypothesis for correct G/W/R**).
+
+No orientation, GPIO or USB changes between these modes. Joystick CLICK **applies** the preview for the remainder of this power-on session; hold K1+K2 to **cancel** and revert to the earlier mode. Reboot restores legacy mode until the optical color settings are physically validated and permanently promoted in a separate patch. K1+K4 INPUT LAB and K2+K3 skin SETTINGS remain unchanged.
+
+**Read the complete diagnostic and four-case acceptance matrix in [PULSE-0.2D-COLOR-LAB.md](../../docs/PULSE-0.2D-COLOR-LAB.md).** The firmware is a *diagnostic candidate*, not yet physically validated. No motor/sensor/host write operations and no RP2040 flash persistence are added.
+
 ## PULSE-0.2D — Scroll acceleration and skins (candidate)
 
 Built-in **Winamp-inspired skin switcher** on the 128×128 Chronoscope. No new hardware controls and no change to GPIO mapping. Normal K1–K4 pages and the operator-approved physical joystick directions are preserved.
@@ -55,7 +72,7 @@ See [PULSE-0.2D skins/navigation spec](../../docs/PULSE-0.2D-SKINS-NAVIGATION.md
 ```bash
 cd ~/openrgd/rgd-pulse
 git fetch origin
-git switch feat/pulse-0.2d-navigation-skins
+git switch feat/pulse-0.2d-color-lab
 git pull --ff-only
 cargo test --workspace
 
