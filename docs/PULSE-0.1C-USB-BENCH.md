@@ -23,7 +23,15 @@ ID_MODEL=RGD_Pulse_Pico_W_prototype
 
 A `/dev/serial/by-path/` symlink was also present. The numeric ttyACM index and USB hub path are host-local observations, **not portable device identifiers** and are deliberately not pinned here. The physical cable transfer and enumeration were operator observed, not independently instrumented.
 
-**Not yet verified:** a successful `HELLO` response, actual 10 Hz `DemoTicks` transport, the corresponding status colors, live input responsiveness while CDC is active, and disconnection/reconnection recovery. Do not mark PULSE-0.1C end-to-end complete from compilation or USB enumeration alone.
+## Operator-reported serial-demo evidence (2026-10-24)
+
+The operator subsequently invoked `pulse-bridge serial-demo` on the enumerated Pulse USB CDC path. The host printed `Pico HELLO OK (protocol=1, board_id=1)`, then successfully wrote 100/100 synthetic `DemoTicks` frames, numbered 1..100. This establishes that the Pico-to-host HELLO exchange worked and the host-side serial writer accepted 100 payloads.
+
+The LCD still showed its 9 diagnostic indicators and side stripes (reported blue/yellow). This is consistent with the bench UI retaining the button grid; color fidelity/physical orientation are not yet characterized. **The original TX-only bridge did not verify Pico-side receipt** and must not be treated as proof of 100 received frames.
+
+This revision introduces `DemoAck` receipts on accepted CRC-valid, fresh DemoTicks, plus a visible progress bar after every ten accepted frames. Physical ACK confirmation remains pending.
+
+**Not yet verified:** 100 Pico-side `DemoAck` replies, UI color fidelity, input responsiveness while CDC is active, and unplug/replug recovery. Do not mark PULSE-0.1C end-to-end complete until these checks pass.
 
 ## Upgrade to USB CDC
 
@@ -85,18 +93,28 @@ Then run (replace with the actual path found above):
 
 ```bash
 cd ~/openrgd/rgd-pulse
-cargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/YOUR_REAL_PICO_PATH 20
+cargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/YOUR_REAL_PICO_PATH 100
 ```
 
-The bridge will **not send anything** until the Pico returns a version-1 `Hello` containing the prototype board ID. It sends `DemoTicks` at 10Hz and then stops; this should make the top bar green while frames arrive and stale/red when no new demo data arrives, unless closing the port first returns it to blue. K1–K4 and joystick must remain responsive throughout.
+The bridge will **not send anything** until the Pico returns a version-1 `Hello` containing the prototype board ID. It sends `DemoTicks` at up to 10Hz, waits for a CRC-valid `DemoAck` with matching sequence and value for each frame, then stops; this should make the top bar green while frames arrive and stale/red when no new demo data arrives, unless closing the port first returns it to blue. K1–K4 and joystick must remain responsive throughout.
+
+
+On the Ubuntu host, a successful post-upgrade run ends with:
+
+```text
+PULSE ACK SUMMARY: 100/100 confirmed, 0 unexpected frames
+PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.
+```
+
+`TX DEMO` alone is insufficient evidence. Keep the Pico isolated from motors and robot power. If acknowledgement is lost, the command exits with an error; do not mark the wave complete.
 
 If the port fails with permission denied, check `groups` and `ls -l` on the port, then grant normal group access via your Ubuntu account's configured device access policies. Avoid running the process as root.
 
 ## Acceptance checklist
 
 - [x] USB CDC appears as a **new identified** device, not an actuator controller (operator-reported VID:PID c0de:cafe).
-- [ ] Correct `Hello` handshake before transmitting any fixture.
-- [ ] Green demo bar while receiving valid synthetic frames.
+- [x] Correct `Hello` handshake before transmitting any fixture (operator-reported).
+- [ ] Pico `DemoAck` confirms each fresh CRC-valid synthetic frame (expect 100/100, or identify losses).\n- [ ] Demo receive progress bar advances in ten-frame steps and completes at 100.\n- [ ] Green demo bar while receiving valid synthetic frames (RGB/BGR verification pending).
 - [ ] Device visually detects stale stream or closed connection.
 - [ ] Nine buttons and LCD activity remain functional during USB.
 - [ ] Unplug/replug and repeated USB serial open/close are stable.
