@@ -26,12 +26,18 @@
 
 **No joystick or K-key action is a robot motion command.**
 
+## INPUT LAB (PULSE-0.2C diagnostic candidate)
+
+If joystick actions are visually ambiguous, **hold K1 + K4 for about 1.2 seconds** to enter a *local, read-only* GPIO diagnostic. Release the keys. Move each joystick direction once; the screen shows **RAW PIN GPnn** and its current **FW MAP** interpretation side by side, plus held/released status and a press counter. Tap each K key individually to confirm its physical GPIO. Hold K1+K4 again to exit. Normal K1–K4/joystick page navigation is suppressed while the lab is open. Only after verifying raw pins should the software direction mapping be corrected.
+
+See [PULSE-0.2C INPUT LAB BENCH](../../docs/PULSE-0.2C-INPUT-LAB-BENCH.md) for a reproducible five-direction test and a concise report format. This mode sends **no hardware, CAN or actuator commands**, and has no remote USB control endpoints.
+
 ## Compile and flash
 
 ```bash
 cd ~/openrgd/rgd-pulse
 git fetch origin
-git switch feat/pulse-0.2b-chronoscope-four-pages
+git switch feat/pulse-0.2c-input-lab
 git pull --ff-only
 cargo test --workspace
 
