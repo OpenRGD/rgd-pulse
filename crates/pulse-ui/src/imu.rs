@@ -23,6 +23,9 @@ pub enum Origin {
     /// Accepted source record from the Console read-only subscriber.
     /// Authentication, origin and allowlist validation happen on the host.
     ConsoleReadOnlyObservation,
+    /// Schema-valid JSON imported from a local file, without proof it came
+    /// from the authenticated live Console feed. Never mark as live.
+    ImportedJsonUnverified,
     /// Deterministic local illustration, never represent as real measurement.
     SyntheticFixture,
 }
@@ -65,6 +68,7 @@ pub struct ImuSample {
 pub enum ImuStatus {
     NoSource,
     Synthetic,
+    UntrustedImport,
     AgeUnknown,
     FreshSensorAxes,
     Stale,
@@ -142,8 +146,10 @@ impl ImuView {
             Some(s) => s,
             None => return ImuStatus::NoSource,
         };
-        if sample.origin == Origin::SyntheticFixture {
-            return ImuStatus::Synthetic;
+        match sample.origin {
+            Origin::SyntheticFixture => return ImuStatus::Synthetic,
+            Origin::ImportedJsonUnverified => return ImuStatus::UntrustedImport,
+            Origin::ConsoleReadOnlyObservation => {}
         }
         match self.observed_age_ms(now_pico_ms) {
             None => ImuStatus::AgeUnknown,
@@ -218,6 +224,16 @@ mod tests {
         s.origin = Origin::SyntheticFixture;
         view.observe(s, 10).unwrap();
         assert_eq!(view.status(12), ImuStatus::Synthetic);
+    }
+
+    #[test]
+    fn imported_console_shaped_json_is_not_equivalent_to_authenticated_live_subscription() {
+        let mut view = ImuView::new();
+        let mut s = candidate();
+        s.origin = Origin::ImportedJsonUnverified;
+        s.host_age_at_forward_ms = Some(0);
+        view.observe(s, 100).unwrap();
+        assert_eq!(view.status(101), ImuStatus::UntrustedImport);
     }
 
     #[test]
