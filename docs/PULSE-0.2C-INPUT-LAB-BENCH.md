@@ -1,6 +1,6 @@
 # PULSE-0.2C — Physical joystick and K1–K4 INPUT LAB
 
-**Status:** corrected joystick mapping **operator-verified in Input Lab on the real Pico W, 2026-10-24** (five directions interpreted correctly; K1–K4 previously reported correct). Normal four-page navigation and USB CDC regression **remain separate acceptance gates**. No robot actuation, CAN access, IMU serial access or real Somatic telemetry.
+**Status: PULSE-0.2C FUNCTIONAL HARDWARE ACCEPTANCE — PASS (operator-reported, 2026-10-24).** Five joystick directions, K1–K4, normal Chronoscope navigation/focus/zoom and a 20/20 CRC-confirmed **synthetic** USB CDC round-trip were reported successful. This does not certify real Somatic metrics, runtime determinism, actuator safety, or untested endurance/USB reconnect cases.
 
 ## Operator-reported input evidence — 2026-10-24
 
@@ -31,6 +31,29 @@ After loading the corrected `feat/pulse-0.2c-input-lab` firmware, the operator r
 **Accepted for this wave:** the software interpretation of all five physical joystick gestures now matches the actual joystick-left/keys-right hardware as displayed by Input Lab: UP→GP18, DOWN→GP20, LEFT→GP16, RIGHT→GP19, CLICK→GP17. This also confirms the unexpectedly assigned **GP17 CLICK** and **GP18 UP** were functional in the operator's on-device test. K1–K4 were already reported correct and their mapping was not changed.
 
 **Not established by this specific report:** confirmation of all four dashboard pages *after exiting Input Lab*, click-to-focus/zoom behavior in the graphical pages, hold-to-exit chord, button hold-repeat behavior, and 20/20 USB HELLO/DEMO/ACK regression on this new firmware. Keep those gates separate; this firmware is still an informational, non-actuating observer.
+
+## Operator's final graphical UI + USB regression — PASS (2026-10-24)
+
+After the post-remap Input Lab test, the operator confirmed the remaining **hardware UI checks** (four page keys, Chronons selection/detail and Somatic focus/zoom) were all correct. This establishes a successful physical interaction smoke test for the 0.2C joystick interpretation in the displayed four-page Chronoscope.
+
+The operator then exercised the *actual mini-PC → Pico W* USB CDC port by a verified `/dev/serial/by-id/usb-OpenRGD_RGD_Pulse_Pico_W_prototype-if00` identity (never the unrelated `ttyUSB0` IMU). The host log reported:
+
+```text
+Pico HELLO OK (protocol=1, board_id=1)
+Sending 20 explicit DEMO frames, at up to 10Hz
+Expecting one CRC-checked RX DemoAck for every accepted DEMO frame.
+TX DEMO seq=1 synthetic_ticks=100
+RX ACK seq=1 validated_ticks=100
+...
+TX DEMO seq=20 synthetic_ticks=2000
+RX ACK seq=20 validated_ticks=2000
+PULSE ACK SUMMARY: 20/20 confirmed, 0 unexpected frames
+PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.
+```
+
+**Physical acceptance summary: PASS** for the 0.2C joystick map, K-page navigation, focus/zoom and 20-frame USB regression. These are **operator-provided hardware observations**: we did not independently instrument signal timing or certify frame delivery at 1 kHz. The bridge still sends synthetic DEMO fixtures and the Pico remains strictly non-actuating.
+
+**Deliberately deferred:** hold-to-repeat with accelerating scrolling, dedicated visual focus feedback, >20-frame endurance specifically on 0.2C, 3/3 DTR reopen on 0.2C, color/pixel offset qualification and genuine read-only Somatic/IMU/Chronon/system measurement sources. These do not invalidate the functional 0.2C acceptance but must not be marked independently passed.
 
 ## Why a dedicated screen?
 
@@ -140,10 +163,11 @@ Once the GPIO tests are complete, locate the actual Pulse USB CDC device by `lsu
 
 ## Acceptance criteria
 
-- [ ] K1+K4 chord reliably enters and exits INPUT LAB after a 1.2s hold.
-- [ ] RAW PIN remains visible after each joystick release and matches reported GPIO.
-- [x] Five physical joystick gestures reported with distinct raw GPIOs (operator observation); GP18=UP, GP20=DOWN, GP16=LEFT, GP19=RIGHT, GP17=CLICK.
-- [x] Four physical K keys reported correct by the operator; independent GPIO-by-GPIO follow-up optional.
-- [x] Candidate logical mapping and Rust unit tests updated from operator observations.
-- [x] Corrected firmware operator-tested in Input Lab: all five joystick directions/interpreted actions match physical movements, including GP18 UP and GP17 CLICK (number of repetitions not separately recorded).
-- [ ] Normal graphical navigation, K1..K4, joystick zoom and USB ACK run still operational after exiting diagnostics.
+- [x] K1+K4 chord used to access INPUT LAB; operator reports full hardware test working, including return to normal Chronoscope navigation (exact 1.2s timing not externally measured).
+- [x] RAW PIN and FW MAP were readable for all reported physical input directions.
+- [x] Five physical joystick gestures correctly mapped by on-device Input Lab: GP18=UP, GP20=DOWN, GP16=LEFT, GP19=RIGHT, GP17=CLICK.
+- [x] K1–K4 physically reported correct; each remains bound to its designated page.
+- [x] Corrected mapping and regression tests checked into the no_std Rust pulse-ui crate.
+- [x] Physical Chronons navigation/detail and Somatic graph focus/zoom reported working after the corrected flash.
+- [x] USB CDC regression on this 0.2C firmware: HELLO OK, 20/20 CRC-checked ACK, 0 unexpected frames (synthetic fixture only).
+- [ ] Longer USB endurance / repeated reboot qualification and pixel/color precision belong to later test waves, not the 0.2C functional gate.
