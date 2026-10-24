@@ -100,7 +100,12 @@ fn serial_demo(path: &str, count: u32) -> Result<(), Box<dyn std::error::Error>>
     let mut port = serialport::new(path, 115_200)
         .timeout(Duration::from_millis(100))
         .open()?;
-    // Embassy's CdcAcmClass::wait_connection requires DTR asserted.
+    // Force a well-defined CDC session edge. Embassy's wait_connection()
+    // waits for an enabled endpoint, *not* DTR. Holding DTR low briefly
+    // lets the RP2040 observer clear prior session state on close/reopen.
+    // Never assume a serial port reopen physically resets the Pico.
+    port.write_data_terminal_ready(false)?;
+    thread::sleep(Duration::from_millis(300));
     port.write_data_terminal_ready(true)?;
 
     let handshake_deadline = Instant::now() + Duration::from_secs(6);
