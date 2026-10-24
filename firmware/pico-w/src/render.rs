@@ -19,7 +19,10 @@ use embedded_graphics::{
 use heapless::String;
 use pulse_ui::{
     input_lab::{raw_gpio, InputLab},
-    landscape_action, Action, Mode, Page, UiState,
+    landscape_action,
+    settings::Settings,
+    skins::{ChromeStyle, SkinId},
+    Action, Mode, Page, UiState,
 };
 
 pub const PIXELS: usize = 128 * 128;
@@ -35,6 +38,75 @@ const RED: Rgb565 = Rgb565::new(31, 13, 9);
 
 pub struct Frame<'a> {
     pub data: &'a mut [u16; PIXELS],
+    /// Theme is visual only. All four pages keep identical data contracts.
+    pub skin: SkinId,
+}
+
+/// These visual roles are mapped from the original RGD palette; warning and
+/// error colors remain unchanged across every skin.
+#[derive(Clone, Copy)]
+struct SkinPalette {
+    bg: Rgb565,
+    panel: Rgb565,
+    border: Rgb565,
+    text: Rgb565,
+    muted: Rgb565,
+    accent: Rgb565,
+    positive: Rgb565,
+}
+
+fn palette(id: SkinId) -> SkinPalette {
+    match id {
+        SkinId::Classic => SkinPalette {
+            bg: BG, panel: PANEL, border: BORDER, text: WHITE,
+            muted: MUTED, accent: CYAN, positive: GREEN,
+        },
+        SkinId::Phosphor => SkinPalette {
+            bg: Rgb565::new(0, 2, 1),
+            panel: Rgb565::new(1, 7, 2),
+            border: Rgb565::new(4, 23, 6),
+            text: Rgb565::new(24, 63, 24),
+            muted: Rgb565::new(9, 27, 11),
+            accent: Rgb565::new(11, 63, 12),
+            positive: Rgb565::new(8, 58, 12),
+        },
+        SkinId::Chrome99 => SkinPalette {
+            bg: Rgb565::new(3, 5, 10),
+            panel: Rgb565::new(8, 13, 20),
+            border: Rgb565::new(17, 29, 27),
+            text: Rgb565::new(31, 63, 31),
+            muted: Rgb565::new(15, 31, 25),
+            accent: Rgb565::new(18, 48, 31),
+            positive: Rgb565::new(11, 55, 17),
+        },
+        SkinId::Italia => SkinPalette {
+            bg: Rgb565::new(2, 4, 6),
+            panel: Rgb565::new(5, 11, 11),
+            border: Rgb565::new(12, 22, 21),
+            text: Rgb565::new(31, 63, 31),
+            muted: Rgb565::new(12, 28, 19),
+            accent: Rgb565::new(6, 48, 17),
+            positive: Rgb565::new(7, 55, 17),
+        },
+    }
+}
+
+impl Frame<'_> {
+    fn skin_color(&self, token: Rgb565) -> Rgb565 {
+        let p = palette(self.skin);
+        if token == BG { p.bg }
+        else if token == PANEL { p.panel }
+        else if token == BORDER { p.border }
+        else if token == WHITE { p.text }
+        else if token == MUTED { p.muted }
+        else if token == CYAN { p.accent }
+        else if token == GREEN { p.positive }
+        else { token } // AMBER and RED keep their warning semantics.
+    }
+
+    fn clear(&mut self) {
+        self.data.fill(palette(self.skin).bg.into_storage());
+    }
 }
 
 impl OriginDimensions for Frame<'_> {
@@ -71,23 +143,23 @@ pub struct RenderData {
 
 fn fill(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, c: Rgb565) {
     let _ = Rectangle::new(Point::new(x, y), Size::new(w, h))
-        .into_styled(PrimitiveStyle::with_fill(c)).draw(f);
+        .into_styled(PrimitiveStyle::with_fill(f.skin_color(c))).draw(f);
 }
 fn stroke(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, c: Rgb565) {
     let _ = Rectangle::new(Point::new(x, y), Size::new(w, h))
-        .into_styled(PrimitiveStyle::with_stroke(c, 1)).draw(f);
+        .into_styled(PrimitiveStyle::with_stroke(f.skin_color(c), 1)).draw(f);
 }
 fn line(f: &mut Frame<'_>, x0: i32, y0: i32, x1: i32, y1: i32, c: Rgb565) {
     let _ = Line::new(Point::new(x0, y0), Point::new(x1, y1))
-        .into_styled(PrimitiveStyle::with_stroke(c, 1)).draw(f);
+        .into_styled(PrimitiveStyle::with_stroke(f.skin_color(c), 1)).draw(f);
 }
 fn small(f: &mut Frame<'_>, text: &str, x: i32, y: i32, c: Rgb565) {
     let _ = Text::with_baseline(text, Point::new(x, y),
-        MonoTextStyle::new(&FONT_5X8, c), Baseline::Top).draw(f);
+        MonoTextStyle::new(&FONT_5X8, f.skin_color(c)), Baseline::Top).draw(f);
 }
 fn big(f: &mut Frame<'_>, text: &str, x: i32, y: i32, c: Rgb565) {
     let _ = Text::with_baseline(text, Point::new(x, y),
-        MonoTextStyle::new(&FONT_7X13_BOLD, c), Baseline::Top).draw(f);
+        MonoTextStyle::new(&FONT_7X13_BOLD, f.skin_color(c)), Baseline::Top).draw(f);
 }
 fn badge(f: &mut Frame<'_>, text: &str, x: i32, y: i32, c: Rgb565) {
     fill(f, x - 2, y - 2, 28, 12, PANEL);
@@ -95,7 +167,7 @@ fn badge(f: &mut Frame<'_>, text: &str, x: i32, y: i32, c: Rgb565) {
 }
 fn circle(f: &mut Frame<'_>, x: i32, y: i32, diameter: u32, c: Rgb565) {
     let _ = Circle::new(Point::new(x,y), diameter)
-        .into_styled(PrimitiveStyle::with_fill(c)).draw(f);
+        .into_styled(PrimitiveStyle::with_fill(f.skin_color(c))).draw(f);
 }
 
 /// Deterministic *illustrative* trend samples; never host/runtime readings.
@@ -128,13 +200,58 @@ fn demo_chart(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, state: &UiState
         old = Some((xx,yy));
     }
     stroke(f, x, y, w, h, BORDER);
+    // Chart styling changes with skin, chart values never change.
+    match f.skin.manifest().style {
+        ChromeStyle::Oscilloscope => {
+            for dx in (3..w as usize - 3).step_by(12) {
+                let sample = start + dx * (span - 1) / ((w as usize - 3).max(1));
+                let value = demo_sample(sample, state.selected());
+                let yy = y + h as i32 - 3 - value * (h as i32 - 5) / 33;
+                fill(f, x + dx as i32, yy, 2, 2, CYAN);
+            }
+        }
+        ChromeStyle::Beveled => {
+            line(f, x + 1, y + 1, x + w as i32 - 2, y + 1, WHITE);
+            line(f, x + 1, y + 2, x + 1, y + h as i32 - 2, MUTED);
+        }
+        ChromeStyle::Tricolore => {
+            fill(f, x + 1, y + 1, 2, 3, GREEN);
+            fill(f, x + 3, y + 1, 2, 3, WHITE);
+            fill(f, x + 5, y + 1, 2, 3, RED);
+        }
+        ChromeStyle::Clean => {}
+    }
 }
 
 fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData) {
     fill(f, 0, 0, 128, 16, PANEL);
     fill(f, 0, 15, 128, 1, CYAN);
+    if f.skin == SkinId::Italia {
+        fill(f, 0, 15, 42, 1, GREEN);
+        fill(f, 42, 15, 44, 1, WHITE);
+        fill(f, 86, 15, 42, 1, RED);
+    }
+    if f.skin == SkinId::Chrome99 {
+        line(f, 0, 0, 127, 0, WHITE);
+    }
     small(f, "RGD", 4, 4, CYAN);
     small(f, ui.page.label(), 26, 4, WHITE);
+    // One key letter + last digit of a press counter; advances even when a
+    // selected row is already at the beginning/end.
+    if let Some(action) = ui.last_action {
+        let key = match action {
+            Action::Up => "U",
+            Action::Down => "D",
+            Action::Left => "L",
+            Action::Right => "R",
+            Action::Click => "C",
+            Action::Page(_) => "K",
+        };
+        let mut event: String<5> = String::new();
+        let _ = write!(event, "{}{}", key, ui.input_count % 10);
+        fill(f, 80, 2, 17, 11, BORDER);
+        small(f, &event, 83, 4, WHITE);
+    }
     badge(f, "DEMO", 98, 3, AMBER);
     circle(f, 122, 3, 4, if state.usb == UsbState::Disconnected { MUTED }
            else if state.usb == UsbState::DemoStale { RED } else { GREEN });
@@ -294,7 +411,7 @@ fn render_system(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
 }
 
 pub fn render(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
-    f.data.fill(BG.into_storage());
+    f.clear();
     top_bar(f,ui,info);
     match ui.page {
         Page::Somatic => render_somatic(f,ui),
@@ -307,7 +424,7 @@ pub fn render(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
 
 /// A short opening splash: informative only, no inference about robot readiness.
 pub fn splash(f: &mut Frame<'_>) {
-    f.data.fill(BG.into_storage());
+    f.clear();
     stroke(f,8,8,112,112,CYAN);
     fill(f,15,20,98,2,AMBER);
     big(f,"OPENRGD",28,40,WHITE);
@@ -337,7 +454,7 @@ fn input_action_name(raw: u8) -> &'static str {
 }
 
 pub fn render_input_lab(f: &mut Frame<'_>, lab: &InputLab) {
-    f.data.fill(BG.into_storage());
+    f.clear();
     fill(f, 0, 0, 128, 17, PANEL);
     fill(f, 0, 16, 128, 1, CYAN);
     small(f, "RGD / INPUT", 5, 4, WHITE);
@@ -379,4 +496,58 @@ pub fn render_input_lab(f: &mut Frame<'_>, lab: &InputLab) {
     small(f, "LAST INPUT PERSISTS", 8, 104, MUTED);
     fill(f, 0, 114, 128, 14, PANEL);
     small(f, "HOLD K1+K4: EXIT", 8, 117, AMBER);
+}
+
+
+/// Winamp-inspired local skin picker. The preview is immediately visible;
+/// CLICK applies for this power-on session, K2+K3 long hold cancels.
+pub fn render_skin_settings(f: &mut Frame<'_>, settings: &Settings) {
+    f.skin = settings.visual_skin();
+    f.clear();
+    fill(f, 0, 0, 128, 16, PANEL);
+    fill(f, 0, 15, 128, 1, CYAN);
+    small(f, "RGD / SETTINGS", 4, 4, WHITE);
+    small(f, "SKINS", 6, 20, CYAN);
+    let mut number: String<20> = String::new();
+    let _ = write!(number, "{}/4", settings.preview.index() + 1);
+    small(f, &number, 106, 20, MUTED);
+
+    fill(f, 4, 32, 120, 48, PANEL);
+    stroke(f, 4, 32, 120, 48, CYAN);
+    if f.skin.manifest().style == ChromeStyle::Beveled {
+        line(f, 6, 34, 121, 34, WHITE);
+        line(f, 6, 35, 6, 76, MUTED);
+    }
+    big(f, settings.preview.manifest().label, 11, 38, WHITE);
+    small(f, "PREVIEW", 12, 57, MUTED);
+    match f.skin.manifest().style {
+        ChromeStyle::Oscilloscope => {
+            for i in 0..9 {
+                let x = 12 + i * 12;
+                let y = if i % 3 == 0 { 70 } else { 67 };
+                line(f, x, y, x + 9, y, CYAN);
+            }
+        }
+        ChromeStyle::Beveled => {
+            fill(f, 12, 69, 94, 7, BORDER);
+            line(f, 13, 69, 105, 69, WHITE);
+        }
+        ChromeStyle::Tricolore => {
+            fill(f, 12, 69, 30, 6, GREEN);
+            fill(f, 42, 69, 30, 6, WHITE);
+            fill(f, 72, 69, 30, 6, RED);
+        }
+        ChromeStyle::Clean => {
+            for i in 0..9 {
+                let x = 12 + i * 12;
+                line(f, x, 73, x + 7, 65 + (i % 3) * 3, CYAN);
+            }
+        }
+    }
+
+    small(f, "PREV < > NEXT", 8, 84, WHITE);
+    small(f, "CLICK: APPLY", 8, 96, GREEN);
+    small(f, "SAVED: THIS SESSION", 8, 105, AMBER);
+    fill(f, 0, 114, 128, 14, PANEL);
+    small(f, "K2+K3 HOLD: CANCEL", 7, 117, MUTED);
 }
