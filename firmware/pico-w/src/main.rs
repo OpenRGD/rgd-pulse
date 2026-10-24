@@ -27,7 +27,7 @@ use lcd::Lcd;
 use panic_halt as _;
 use pulse_protocol::{encode, Frame, Kind, StreamDecoder};
 use pulse_ui::{
-    color_lab::{ColorLab, ColorMode},
+    color_lab::{ColorLab, VALIDATED_BOOT_MODE},
     input_lab::InputLab,
     input_repeat::InputRepeater,
     landscape_action,
@@ -132,7 +132,8 @@ async fn main(spawner: Spawner) {
     let mut input_lab = InputLab::new(); // K1+K4 >=1.2s: raw GPIO diagnostics
     let mut settings = Settings::new(); // K2+K3 >=1.2s: Winamp-style skin picker
     let mut color_lab = ColorLab::new(); // K1+K2 >=1.2s: LCD RGB/BGR x INV calibration
-    let mut lcd_color_mode = ColorMode::InvertedRgb; // initially same as old firmware
+    // Track the exact mode that lcd.init() applied before the splash.
+    let mut lcd_color_mode = VALIDATED_BOOT_MODE;
     let mut repeater = InputRepeater::new(); // Direction keys only, never CLICK/K1-K4
     let mut decoder = StreamDecoder::new();
     let mut rx_packet = [0u8; 64];
