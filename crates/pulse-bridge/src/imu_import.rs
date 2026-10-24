@@ -57,8 +57,8 @@ fn parse_session_uuid_hex(id: &str) -> Result<[u8; 16], &'static str> {
     }
     let mut bytes = [0u8; 16];
     for (i, slot) in bytes.iter_mut().enumerate() {
-        *slot = u8::from_str_radix(&id[i * 2..i * 2 + 2], 16)
-            .map_err(|_| "invalid session_id hex")?;
+        *slot =
+            u8::from_str_radix(&id[i * 2..i * 2 + 2], 16).map_err(|_| "invalid session_id hex")?;
     }
     Ok(bytes)
 }
@@ -67,8 +67,8 @@ pub fn parse_offline_candidate_json(raw: &str) -> Result<ImuSample, String> {
     if raw.len() > 16 * 1024 {
         return Err("IMU candidate JSON exceeds the 16KiB offline limit".into());
     }
-    let obs: ConsoleImuJson =
-        serde_json::from_str(raw).map_err(|error| format!("IMU candidate shape invalid: {error}"))?;
+    let obs: ConsoleImuJson = serde_json::from_str(raw)
+        .map_err(|error| format!("IMU candidate shape invalid: {error}"))?;
     if obs.schema_version != CONSOLE_OBSERVATION_SCHEMA
         || obs.robot_id != ROBOT_ID
         || obs.sensor_id != SENSOR_ID
@@ -83,8 +83,7 @@ pub fn parse_offline_candidate_json(raw: &str) -> Result<ImuSample, String> {
     if obs.sequence == 0 || obs.host_monotonic_ns == 0 || obs.host_receive_utc.is_empty() {
         return Err("IMU observation missing valid seq/host receipt timestamp".into());
     }
-    let source_session = parse_session_uuid_hex(&obs.session_id)
-        .map_err(str::to_string)?;
+    let source_session = parse_session_uuid_hex(&obs.session_id).map_err(str::to_string)?;
     let mut imu = ImuSample {
         origin: Origin::ImportedJsonUnverified,
         frame_quality: FrameQuality::SensorAxesUnverified,
@@ -105,11 +104,9 @@ pub fn parse_offline_candidate_json(raw: &str) -> Result<ImuSample, String> {
     };
     for i in 0..3 {
         imu.gyro_mrad_s[i] =
-            quantize_i32(obs.angular_velocity_rad_s[i], 1000.0, 1000.0)
-                .map_err(str::to_string)?;
+            quantize_i32(obs.angular_velocity_rad_s[i], 1000.0, 1000.0).map_err(str::to_string)?;
         imu.accel_mm_s2[i] =
-            quantize_i32(obs.acceleration_m_s2[i], 1000.0, 1000.0)
-                .map_err(str::to_string)?;
+            quantize_i32(obs.acceleration_m_s2[i], 1000.0, 1000.0).map_err(str::to_string)?;
     }
     if let Some(temp) = obs.temperature_c {
         imu.temp_cdeg = Some(quantize_i16(temp, 100.0, 200.0).map_err(str::to_string)?);
@@ -144,7 +141,10 @@ mod tests {
         let s = parse_offline_candidate_json(JSON).unwrap();
         assert_eq!(s.origin, Origin::ImportedJsonUnverified);
         assert_eq!(s.frame_quality, FrameQuality::SensorAxesUnverified);
-        assert_eq!([s.roll_cdeg, s.pitch_cdeg, s.yaw_cdeg], [-460, -483, -14987]);
+        assert_eq!(
+            [s.roll_cdeg, s.pitch_cdeg, s.yaw_cdeg],
+            [-460, -483, -14987]
+        );
         assert_eq!(s.gyro_mrad_s, [10, 20, 30]);
         assert_eq!(s.accel_mm_s2, [0, 0, 9807]);
         assert_eq!(s.temp_cdeg, None);
@@ -154,39 +154,40 @@ mod tests {
     #[test]
     fn importing_a_file_cannot_launder_it_into_live_console_telemetry() {
         let mut view = ImuView::new();
-        view.observe(parse_offline_candidate_json(JSON).unwrap(), 1000).unwrap();
+        view.observe(parse_offline_candidate_json(JSON).unwrap(), 1000)
+            .unwrap();
         assert_eq!(view.status(1001), ImuStatus::UntrustedImport);
     }
 
     #[test]
     fn reject_source_spoofing_calibrated_claims_and_bad_session_id() {
-        assert!(parse_offline_candidate_json(&JSON.replace(
-            "paky01-wit-serial",
-            "other-source"
-        )).is_err());
+        assert!(
+            parse_offline_candidate_json(&JSON.replace("paky01-wit-serial", "other-source"))
+                .is_err()
+        );
         assert!(parse_offline_candidate_json(&JSON.replace(
             "\"calibration_revision\":null",
             "\"calibration_revision\":\"fake-world-calibration\""
-        )).is_err());
-        assert!(parse_offline_candidate_json(&JSON.replace(
-            "00112233445566778899aabbccddeeff",
-            "bad"
-        )).is_err());
+        ))
+        .is_err());
+        assert!(parse_offline_candidate_json(
+            &JSON.replace("00112233445566778899aabbccddeeff", "bad")
+        )
+        .is_err());
     }
 
     #[test]
     fn reject_overflow_shape_and_sequence_zero() {
-        assert!(parse_offline_candidate_json(&JSON.replace(
-            "-4.60,-4.83,-149.87",
-            "-400.0,-4.83,-149.87"
-        )).is_err());
-        assert!(parse_offline_candidate_json(&JSON.replace(
-            "\"sequence\":42",
-            "\"sequence\":0"
-        )).is_err());
-        assert!(parse_offline_candidate_json(&JSON.replace(
-            "[0.0,0.0,9.80665]",
-            "[0.0,0.0]"
-        )).is_err());
+        assert!(parse_offline_candidate_json(
+            &JSON.replace("-4.60,-4.83,-149.87", "-400.0,-4.83,-149.87")
+        )
+        .is_err());
+        assert!(
+            parse_offline_candidate_json(&JSON.replace("\"sequence\":42", "\"sequence\":0"))
+                .is_err()
+        );
+        assert!(
+            parse_offline_candidate_json(&JSON.replace("[0.0,0.0,9.80665]", "[0.0,0.0]")).is_err()
+        );
     }
 }
