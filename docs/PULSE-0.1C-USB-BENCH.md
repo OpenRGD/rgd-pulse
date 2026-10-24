@@ -11,6 +11,20 @@
 
 These observations are **operator-reported**, not a physical certification or independent measurement.
 
+## Operator-reported USB enumeration evidence (2026-10-24)
+
+On Paky-01's Ubuntu mini-PC the operator successfully ran the PULSE-0.1C source branch through `cargo test --workspace` (**12/12 tests**: 4 pulse-core and 8 pulse-protocol), compiled `pulse-pico-w` for `thumbv6m-none-eabi` in release mode, and transferred the UF2 onto the `RPI-RP2` mount. After reboot, udev reported a new USB CDC `ttyACM` port with:
+
+```text
+ID_VENDOR_ID=c0de
+ID_MODEL_ID=cafe
+ID_MODEL=RGD_Pulse_Pico_W_prototype
+```
+
+A `/dev/serial/by-path/` symlink was also present. The numeric ttyACM index and USB hub path are host-local observations, **not portable device identifiers** and are deliberately not pinned here. The physical cable transfer and enumeration were operator observed, not independently instrumented.
+
+**Not yet verified:** a successful `HELLO` response, actual 10 Hz `DemoTicks` transport, the corresponding status colors, live input responsiveness while CDC is active, and disconnection/reconnection recovery. Do not mark PULSE-0.1C end-to-end complete from compilation or USB enumeration alone.
+
 ## Upgrade to USB CDC
 
 On the Ubuntu mini-PC, use the existing `feat/pulse-0.1c-usb-cdc` branch (stacked on `feat/pulse-0.1a-foundation`):
@@ -80,7 +94,7 @@ If the port fails with permission denied, check `groups` and `ls -l` on the port
 
 ## Acceptance checklist
 
-- [ ] USB CDC appears as a **new identified** device, not an actuator controller.
+- [x] USB CDC appears as a **new identified** device, not an actuator controller (operator-reported VID:PID c0de:cafe).
 - [ ] Correct `Hello` handshake before transmitting any fixture.
 - [ ] Green demo bar while receiving valid synthetic frames.
 - [ ] Device visually detects stale stream or closed connection.
