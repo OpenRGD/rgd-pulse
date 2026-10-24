@@ -28,7 +28,7 @@
 
 ## INPUT LAB (PULSE-0.2C diagnostic candidate)
 
-**First physical results reported 2026-10-24:** joystick physical UP=GP18, DOWN=GP20, LEFT=GP16, RIGHT=GP19, CLICK=GP17. K1–K4 are reported all correct. The `pulse_ui::landscape_action` software map now matches these observations; **the operator subsequently confirmed the corrected mapping works for all five directions in Input Lab on the physical Pico W**. GP17 (CLICK) and GP18 (UP) differ from the vendor-derived orientation guess. Dashboard interaction and USB regressions remain unverified on this revision.
+**Physical functional acceptance PASS (2026-10-24, operator report):** joystick UP=GP18, DOWN=GP20, LEFT=GP16, RIGHT=GP19, CLICK=GP17, with K1–K4 correct. After reflashing the corrected `pulse_ui::landscape_action`, the operator confirmed all five inputs in Input Lab **and** normal four-screen graphical navigation, Chronon detail, Somatic focus/zoom and a 20/20 synthetic USB CDC ACK regression. GP17 CLICK and GP18 UP differ from the initial vendor-oriented hypothesis; do not regress to that earlier mapping.
 
 To recheck the mapping, **hold K1 + K4 for about 1.2 seconds** to enter a *local, read-only* GPIO diagnostic. Release the keys. Move each joystick direction once; the screen shows **RAW PIN GPnn** and its newly mapped **FW MAP** interpretation side by side, plus held/released status and a press counter. Tap each K key individually to confirm its physical GPIO. Hold K1+K4 again to exit. Normal K1–K4/joystick page navigation is suppressed while the lab is open.
 
@@ -61,7 +61,7 @@ Power **only** from the Pico's Micro-USB port via a real data hub. If flashing, 
 
 ## Still unverified on physical 0.2B firmware
 
-- Physical 0.2B first flash confirmed splash, graphics and K1–K4. Physical INPUT LAB then reported all five joystick GPIOs; **the updated logical direction mapping has passed the operator's post-flash Input Lab test**; page navigation, joystick focus/zoom and transport still need separate regression. ST7735S 0x60 rotation, RGB/BGR, X/Y offsets and clipping need their own physical confirmation.
+- Physical 0.2C input mapping and normal page/focus/zoom behavior were operator-verified, and synthetic HELLO/ACK transport passed 20/20. ST7735S RGB/BGR fidelity, precise X/Y offsets and clipping remain separate physical qualifications.
 - Actual redraw latency and joysticks during simultaneous USB traffic.
 - 3/3 repeated serial opens, 100/100 ACK and cable disconnect/reconnect regressions.
 - Real Somatic loop measurement, Chronograph provenance/Chronon data, calibrated IMU, full joint mapping and measured voltage.
