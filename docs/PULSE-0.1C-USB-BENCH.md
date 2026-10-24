@@ -113,6 +113,22 @@ Each session independently started at DemoTicks sequence 1 and ended with `PULSE
 
 **Still pending:** long-run / 100-frame throughput, unplug-replug re-enumeration, LCD progress and colors, all nine inputs *during* traffic, fault injection and independent power tests. No real Somatic telemetry was transmitted. Do not interpret these observations as motor-safety or deterministic-loop certification.
 
+## Operator-reported 100-frame full round-trip — 2026-10-24
+
+Following the successful three-session DTR reopening test, the operator performed a longer `serial-demo` run with **100 explicitly synthetic DEMO frames**. Reported terminal result:
+
+```text
+PULSE ACK SUMMARY: 100/100 confirmed, 0 unexpected frames
+Do not interpret demo values as Somatic loop performance.
+PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.
+```
+
+Physical LCD observations during the run: the progress bar visibly advanced **once for each group of ten accepted frames**, and the operator confirmed the buttons remained responsive while traffic was active. An explicit repeat of each of the nine individual controls during traffic was **not** separately documented in this run (all nine had been validated in PULSE-0.1B).
+
+This provides evidence of valid bidirectional CDC transport, 100 matching CRC-checked ACKs, observable receive progress, and continued input response under this synthetic load. It **does not** establish a real 1 kHz Somatic Runtime loop rate, transport timing guarantees, or full safety behavior.
+
+Remaining physical gate: unplug/replug and re-enumeration with another successful ACK run. Other refinements: inspect RGB/BGR/color mapping, display pixel offsets and verify stale/disconnected visual state.
+
 ## Upgrade to USB CDC
 
 On the Ubuntu mini-PC, use the existing `feat/pulse-0.1c-usb-cdc` branch (stacked on `feat/pulse-0.1a-foundation`):
@@ -194,11 +210,11 @@ If the port fails with permission denied, check `groups` and `ls -l` on the port
 
 - [x] USB CDC appears as a **new identified** device, not an actuator controller (operator-reported VID:PID c0de:cafe).
 - [x] Correct `Hello` handshake before transmitting any fixture (operator-reported).
-- [x] Pico `DemoAck` confirms 20/20 fresh CRC-valid DEMO frames, matching sequence/value; 100/100 not yet tested.
-- [ ] Demo receive progress bar advances in ten-frame steps and completes at 100.
-- [ ] Green demo bar while receiving valid synthetic frames (RGB/BGR verification pending).
+- [x] Pico `DemoAck` confirms 100/100 synthetic frames with matching sequence/value and no unexpected frames.
+- [x] LCD receive progress bar visibly advances in ten-frame steps through the 100-frame test.
+- [ ] Green demo status color visually calibrated (RGB/BGR verification pending).
 - [ ] Device visually detects stale stream or closed connection.
-- [ ] Nine buttons and LCD activity remain functional during USB.
+- [x] Operator reports input responsiveness during active 100-frame CDC traffic; individual 9/9 under load can be repeated in the final hardware regression.
 - [x] Three repeated USB serial open/close cycles without power-cycle: 3/3 HELLO, 60/60 matching ACK, 0 unexpected frames.
 - [ ] Physical USB unplug/replug re-enumeration and subsequent session verified.
 - [ ] No power, motor, CAN, actuation or calibration operation triggered.
