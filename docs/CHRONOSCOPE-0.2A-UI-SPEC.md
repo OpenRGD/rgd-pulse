@@ -8,6 +8,49 @@ Build a high-quality, legible observability HMI on the real **Raspberry Pi Pico 
 
 The current firmware has already shown real LCD graphics, a blinking indicator, 9 hardware inputs and USB CDC with synthetic HELLO / DEMO / ACK. It does NOT currently display real Somatic loop metrics, verified Chronons, IMU data or motor/voltage readings.
 
+## Mandatory physical orientation — LANDSCAPE / controls LEFT–RIGHT
+
+**Accepted operator direction:** view the front of the Seengreat board with the **joystick on the LEFT** and the **four K1–K4 buttons on the RIGHT**. Compared with the vendor portrait photograph (K1–K4 above the LCD, joystick below), rotate the **whole assembled board clockwise by 90° as viewed from the display/front**. All UI lettering, numbers, charts and movement should read naturally in this physical landscape pose, not in the original upright portrait view.
+
+```text
+                  FRONT — OPERATOR'S LANDSCAPE VIEW
+          +----------------------------------------+
+          |              128 × 128 LCD             |
+          |              RGD / LOOP                |
+   UP     |    998 Hz             ● LIVE           |   [ K1 ] LOOP
+ LEFT O RIGHT  ┌──────────────┐   1.02 ms         |   [ K2 ] CHRONONS
+  DOWN   |     ╱╲__╱╲___╱╲    └──────────────┘    |   [ K3 ] IMU
+         |                                        |   [ K4 ] SYSTEM
+         +----------------------------------------+
+  JOYSTICK              SQUARE PANEL                 FOUR BUTTONS
+```
+
+Schematic illustrates the **wide physical module**, not a wider LCD: the display still has **128×128 square pixels**. Numbers and LIVE status are graphic placeholders, not measured values. The final hardware arrangement is joystick at the left, K1..K4 in a vertical column on the right, **top-to-bottom K1 → K4** after clockwise rotation.
+
+### Coordinate system and rotation ownership
+
+- Define the **logical display coordinate frame from the final operator view**: `x=0` at the display's left edge closest to joystick, `x=127` at the right edge closest to keys; `y=0` at the visual top, `y=127` at the bottom.
+- Rotate all graphics **90° clockwise relative to the vendor's original portrait reference**. The hardware-driver MADCTL orientation and ST7735S X/Y offsets must be validated on the actual panel. Don't commit an unverified MADCTL bit pattern; avoid double-rotating between the driver and UI layer.
+- The 128×128 resolution **does not become 128×anything wider** on rotation. The physical PCB/module is landscape, not the pixel matrix aspect ratio.
+- All typography, chart axes, indicators, chronological direction and gestures refer to **the logical operator view**, regardless of raw native GPIO orientation.
+- Both UI and main 5-inch Console should use the same meaning for UP/DOWN, LEFT/RIGHT in their controls. A K1–K4 press always changes the top-level page, never triggers motion.
+
+### Orientation-aware joystick mapping (proposed, physically verify)
+
+From the previously documented vendor GPIO directions when the board is upright in portrait: joystick raw LEFT=GP16, RIGHT=GP17, UP=GP19, DOWN=GP20, CENTER=GP18. Rotating the front-view hardware **clockwise 90°** changes the operator-facing directions:
+
+| Operator gesture in final landscape | Raw board direction | Pico GPIO |
+|---|---|---|
+| UP | Original LEFT | GP16 |
+| DOWN | Original RIGHT | GP17 |
+| LEFT | Original DOWN | GP20 |
+| RIGHT | Original UP | GP19 |
+| CLICK | CENTER (unchanged) | GP18 |
+
+Use one central `raw_gpio -> logical_button` transform before UI navigation. Existing input verification established **each of 9 raw controls works**, not that the direction semantics in this new orientation have already been physically verified. Test all four joystick directions again when this layout is flashed.
+
+Buttons: K1=GP8, K2=GP4, K3=GP3, K4=GP2; keep the direct page mapping, now in a physical top-to-bottom row at the **right of the display**.
+
 ## Mandatory direct access — the four buttons
 
 | Key | Screen | Primary content |
@@ -19,7 +62,7 @@ The current firmware has already shown real LCD graphics, a blinking indicator, 
 
 Every K key always opens its designated **base** screen, including when a detail modal is open. No K key may cause motor actuation or modify hardware.
 
-## Common layout and visual system (128×128)
+## Common layout and visual system (128×128 square, landscape-mounted)
 
 - Top header, y=0..15: `RGD / [PAGE]` and a compact source state `LIVE` / `DEMO` / `STALE` / `N/A`.
 - Main region, y=16..110: 1–2 hero numbers, at most **one primary chart** or one timeline at once, context microcopy; no horizontally scrolling prose.
@@ -29,34 +72,33 @@ Every K key always opens its designated **base** screen, including when a detail
 - No infinite animations or hidden "working" indicators suggesting robot safety. Priority order: **validity / age > metric > chart > decoration**.
 - When USB stops delivering frames, retain UI navigation, mark affected data `STALE` and avoid continuing an apparently live animation of telemetry. A lost USB port is not proof motors are stopped or safe.
 
-### Layout wireframes (schematic, NOT 128px-accurate artwork)
+### Landscape-operator wireframes (schematic, not pixel-perfect)
+
+**Read each center display upright with the joystick physically on the left and K1..K4 on the right**. These are four interchangeable UI contents on a square LCD mounted in a wide, hand-operated PCB.
 
 ```text
- K1 SOMATIC                    K2 CHRONONS
- +------------------+          +------------------+
- | RGD / LOOP  DEMO  |          | RGD / TIME  LIVE |
- |    --- Hz         |          | >● -0.2s OBS     |
- | TARGET 1000 Hz    |          |  ● -0.7s PLAN    |
- | J95 --us  MISS -- |          |  ● -1.4s EVENT   |
- |   _/\_/\___/\     |          |  ● -2.1s FAULT   |
- |  /          \     |          | ID: --           |
- |     5s / 30s      |          | ● Time navigator |
- | 1  [2]  3   4     |          | 1 [2] 3   4      |
- +------------------+          +------------------+
+     JOY          K1 / SOMATIC            KEYS       JOY          K2 / CHRONONS           KEYS
+                   ┌────────────────┐      K1                     ┌────────────────┐      K1
+      ↑            │RGD/LOOP   DEMO │      K2       ↑             │RGD/TIME   DEMO │      K2
+    ← ● →          │    --- Hz      │      K3     ← ● →           │> OBS  -0.2s    │      K3
+      ↓            │TGT 1000 Hz     │      K4       ↓             │  PLAN -0.7s    │      K4
+                   │_╱╲__╱╲____     │                             │  ERR  -1.4s    │
+                   │J --µs MISS --  │                             │ID --  CLICK ↵  │
+                   │ ● ○ ○ ○        │                             │ ○ ● ○ ○        │
+                   └────────────────┘                             └────────────────┘
 
- K3 IMU                        K4 SYSTEM
- +------------------+          +------------------+
- | RGD / IMU  RAW   |          | RGD / SYS   LIVE |
- | R -4.6°  P -4.8° |          | MOTORS 22 CFG    |
- |     +------+     |          | ONLINE  --       |
- |     |  x   |     |          | CAN     --       |
- |     +------+     |          | DRIVE --.- V     |
- | |gyro| --- °/s   |          | AUX12  --.- V    |
- |  __/\___/\__     |          | USB CDC ●        |
- | YAW* --° UNCAL   |          | TEMP --°C        |
- | 1 2 [3] 4        |          | 1 2 3 [4]        |
- +------------------+          +------------------+
+     JOY          K3 / IMU                KEYS       JOY          K4 / SYSTEM             KEYS
+                   ┌────────────────┐      K1                     ┌────────────────┐      K1
+      ↑            │RGD/IMU    RAW  │      K2       ↑             │RGD/SYS    LIVE │      K2
+    ← ● →          │ROLL    --.-°   │      K3     ← ● →           │MOTORS  22 CFG  │      K3
+      ↓            │PITCH   --.-°   │      K4       ↓             │ONLINE  --      │      K4
+                   │ [sensor axes]  │                             │CAN     --      │
+                   │GYRO -- °/s     │                             │DRIVE   --.- V  │
+                   │ ○ ○ ● ○        │                             │ ○ ○ ○ ●        │
+                   └────────────────┘                             └────────────────┘
 ```
+
+The right-side physical buttons **are not on-screen touch targets**: K1..K4 is the one-to-one, immediately accessible navigation. On-screen bottom four dots are optional current-page indicators. The main chart/list is always upright in the joystick-left, keys-right orientation.
 
 Numbers above are **illustrative** (e.g. IMU -4.6°, 1000 Hz target), never current measured values. When a value has no accepted live source, use `--` rather than a plausible number.
 
@@ -117,13 +159,18 @@ Debounce inputs and ensure K1..K4 always escape overlays. No joystick input can 
 ## MVP acceptance gates (not yet met)
 
 1. Visible legible headings, icons, numbers and chart pixels; calibrated RGB/BGR, inversion and column/row offsets.
-2. All four K keys switch screens immediately; joystick mapping and detail dismissal work; no reflash or reboot required for navigation.
+2. In the **joystick-left / K1–K4-right** physical landscape pose, text and chart axes are upright; all four K keys switch screens immediately; physical joystick UP/DOWN/LEFT/RIGHT follows the orientation mapping above and detail dismissal works, without reflash/reboot during navigation.
 3. DEMO datasets available offline for all four screens, *visibly marked DEMO* at all times.
 4. Real read-only IMU bridge consumes existing fan-out without serial-reader contention; sensor-frame labels and calibration warning remain visible.
 5. Missing system numbers show `--`, not zero, guessed voltages or 22/22 online.
 6. USB disconnection marks streams stale without freezing buttons/menu.
 7. 100/100 synthetic ACK regression and 3/3 DTR session reopen stay green after UI changes.
 8. Future real loop and Chronon adapters are tested independently; no claim of 1kHz actual performance, Chronograph synchronization, motor safety or active actuation.
+
+## Orientation design decision
+
+- **LOCKED (operator request 2026-10-24):** Chronoscope HMI is physically landscape, joystick **LEFT**, four keys **RIGHT**; rotate display content **90° clockwise** relative to the former portrait mockups.
+- Hardware test gate: verify physical clockwise mounting, K1..K4 top-to-bottom, calibrated MADCTL and raw-to-logical joystick axes before claiming the landscape implementation is complete.
 
 ## Decisions awaiting design sign-off
 
