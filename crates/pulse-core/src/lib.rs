@@ -79,7 +79,7 @@ impl Observer {
 mod tests {
     use super::*;
     fn tick(sequence: u32, ticks: u32) -> Frame {
-        Frame { kind: Kind::LoopTicks, sequence, uptime_ms: sequence * 100, value: ticks }
+        Frame { kind: Kind::LoopTicks, sequence, uptime_ms: sequence.wrapping_mul(100), value: ticks }
     }
 
     #[test]
