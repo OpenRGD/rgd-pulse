@@ -128,7 +128,10 @@ mod tests {
         assert!(d.active);
         assert!(d.observe(0, 5100));
         assert!(!d.chord_held());
-        assert!(!d.observe(chord, 5200));
+        // Pressing the chord redraws the active input panel immediately,
+        // but should not toggle it until the full 1200ms has elapsed.
+        assert!(d.observe(chord, 5200));
+        assert!(d.active);
         assert!(d.observe(chord, 6400));
         assert!(!d.active);
     }
