@@ -1,15 +1,43 @@
 #![no_std]
 #![no_main]
 
-//! Standalone LOCAL bring-up only. No USB telemetry, no motors and no power monitoring.
-//! Slow bit-banged SPI0-compatible pins allow visual verification before optimizing DMA/SPI.
+//! PULSE-0.1C bench-only USB CDC + previously verified ST7735S display.
+//! Read-only diagnostic consumer. No motors, no CAN, no calibration, no E-stop.
 
-use cortex_m_rt::entry;
+use embassy_executor::Spawner;
+use embassy_futures::select::{select, Either};
 use embassy_rp::{
+    bind_interrupts,
     gpio::{Input, Level, Output, Pull},
+    peripherals::USB,
+    usb::{Driver, InterruptHandler},
     Peripherals,
 };
+use embassy_time::{Instant, Timer};
+use embassy_usb::{
+    class::cdc_acm::{CdcAcmClass, State},
+    UsbDevice,
+};
 use panic_halt as _;
+use pulse_protocol::{encode, Frame, Kind, StreamDecoder};
+use static_cell::StaticCell;
+
+bind_interrupts!(struct Irqs {
+    USBCTRL_IRQ => InterruptHandler<USB>;
+});
+
+type MyUsbDriver = Driver<'static, USB>;
+type MyUsbDevice = UsbDevice<'static, MyUsbDriver>;
+
+#[embassy_executor::task]
+async fn usb_task(mut usb: MyUsbDevice) -> ! {
+    usb.run().await
+}
+
+// Prototype-only identifier. Not a registered production VID/PID.
+// Do not enable automatic actuator access based on the USB identity.
+const PROTOTYPE_BOARD_ID: u32 = 1;
+const DEMO_STALE_AFTER_MS: u64 = 900;
 
 const BLACK: u16 = 0x0000;
 const BLUE: u16 = 0x045f;
@@ -113,9 +141,11 @@ impl<'a> Lcd<'a> {
     }
 }
 
-#[entry]
-fn main() -> ! {
+#[embassy_executor::main]
+async fn main(spawner: Spawner) {
     let p: Peripherals = embassy_rp::init(Default::default());
+
+    // Keep the existing proven 9 inputs and bit-banged LCD driver untouched.
     let mut lcd = Lcd {
         sck: Output::new(p.PIN_6, Level::Low),
         mosi: Output::new(p.PIN_7, Level::Low),
@@ -124,42 +154,168 @@ fn main() -> ! {
         reset: Output::new(p.PIN_12, Level::High),
         bl: Output::new(p.PIN_13, Level::Low),
     };
-    // All keys are input pull-up; read-only. Their active-low polarity is provisional.
     let keys = [
-        Input::new(p.PIN_8, Pull::Up), Input::new(p.PIN_4, Pull::Up),
-        Input::new(p.PIN_3, Pull::Up), Input::new(p.PIN_2, Pull::Up),
-        Input::new(p.PIN_16, Pull::Up), Input::new(p.PIN_20, Pull::Up),
-        Input::new(p.PIN_17, Pull::Up), Input::new(p.PIN_18, Pull::Up),
+        Input::new(p.PIN_8, Pull::Up),
+        Input::new(p.PIN_4, Pull::Up),
+        Input::new(p.PIN_3, Pull::Up),
+        Input::new(p.PIN_2, Pull::Up),
+        Input::new(p.PIN_16, Pull::Up),
+        Input::new(p.PIN_20, Pull::Up),
+        Input::new(p.PIN_17, Pull::Up),
+        Input::new(p.PIN_18, Pull::Up),
         Input::new(p.PIN_19, Pull::Up),
     ];
 
-    // First independent boot diagnostic: three visible backlight pulses.
-    // This does not require working SPI or ST7735S initialization.
-    // If no pulses can be seen, check that this firmware actually boots and
-    // that GP13 can drive BL before investigating the LCD graphics.
+    // Independent hardware boot marker: three visible backlight pulses.
     for _ in 0..3 {
         lcd.bl.set_high();
         spin(BOOT_BLINK_HOLD);
         lcd.bl.set_low();
         spin(BOOT_BLINK_HOLD);
     }
-
     lcd.init();
     lcd.rect(0, 0, 128, 128, BLACK);
     lcd.rect(0, 0, 128, 14, BLUE);
     lcd.rect(4, 18, 120, 4, CYAN);
-    lcd.rect(4, 28, 120, 7, GREEN); // self-test marker
+    lcd.rect(4, 28, 120, 7, GREEN);
     lcd.rect(0, 113, 128, 15, BLUE);
 
-    let mut prior_mask = u16::MAX;
-    let mut blink = false;
+    // CDC ACM gives a host-visible serial port (e.g. /dev/ttyACM*).
+    // The board ID is a prototype type, not a unique device serial number.
+    let driver = Driver::new(p.USB, Irqs);
+    let mut usb_config = embassy_usb::Config::new(0xc0de, 0xcafe);
+    usb_config.manufacturer = Some("OpenRGD");
+    usb_config.product = Some("RGD Pulse Pico W prototype");
+    usb_config.serial_number = None;
+    usb_config.max_power = 100;
+    usb_config.max_packet_size_0 = 64;
+
+    static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
+    static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
+    static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
+    static CDC_STATE: StaticCell<State> = StaticCell::new();
+
+    let mut builder = embassy_usb::Builder::new(
+        driver,
+        usb_config,
+        CONFIG_DESCRIPTOR.init([0u8; 256]),
+        BOS_DESCRIPTOR.init([0u8; 256]),
+        &mut [],
+        CONTROL_BUF.init([0u8; 64]),
+    );
+    let mut cdc = CdcAcmClass::new(&mut builder, CDC_STATE.init(State::new()), 64);
+    let device = builder.build();
+    spawner.spawn(usb_task(device)).unwrap();
+
+    let mut decoder = StreamDecoder::new();
+    let mut rx_packet = [0u8; 64];
+    let mut usb_connected = false;
+    let mut last_demo_ms: Option<u64> = None;
+    let mut last_demo_sequence: Option<u32> = None;
+    let mut invalid_frames: u32 = 0;
+    let mut prior_mask: u16 = u16::MAX;
+    let mut last_state: u8 = 255;
+    let mut indicator = false;
+
     loop {
+        // Timer selection means physical buttons and LCD heartbeat remain
+        // usable even when the host has not opened the USB serial device.
+        if !usb_connected {
+            match select(cdc.wait_connection(), Timer::after_millis(120)).await {
+                Either::First(()) => {
+                    usb_connected = true;
+                    decoder.reset();
+                    last_demo_ms = None;
+                    last_demo_sequence = None;
+                    let greeting = encode(Frame {
+                        kind: Kind::Hello,
+                        sequence: 1,
+                        uptime_ms: Instant::now().as_millis() as u32,
+                        value: PROTOTYPE_BOARD_ID,
+                    });
+                    if cdc.write_packet(&greeting).await.is_err() {
+                        usb_connected = false;
+                    }
+                }
+                Either::Second(()) => {}
+            }
+        } else {
+            match select(cdc.read_packet(&mut rx_packet), Timer::after_millis(120)).await {
+                Either::First(Ok(count)) => {
+                    for byte in rx_packet[..count].iter().copied() {
+                        match decoder.push(byte) {
+                            Some(Ok(frame)) if frame.kind == Kind::DemoTicks => {
+                                // Only explicit synthetic demo frames update the
+                                // demo status; real Somatic integration is future work.
+                                let newer = match last_demo_sequence {
+                                    None => true,
+                                    Some(previous) => {
+                                        let diff = frame.sequence.wrapping_sub(previous);
+                                        diff > 0 && diff < 0x8000_0000
+                                    }
+                                };
+                                if newer {
+                                    last_demo_sequence = Some(frame.sequence);
+                                    last_demo_ms = Some(Instant::now().as_millis());
+                                }
+                            }
+                            Some(Err(_)) => {
+                                invalid_frames = invalid_frames.saturating_add(1);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Either::First(Err(_)) => {
+                    usb_connected = false;
+                    last_demo_ms = None;
+                    last_demo_sequence = None;
+                    decoder.reset();
+                }
+                Either::Second(()) => {}
+            }
+        }
+
+        let now = Instant::now().as_millis();
+        // Status colors: BLUE=USB not opened, CYAN=CDC connected but no demo,
+        // GREEN=fresh synthetic frames, RED=demo stream stale.
+        let state: u8 = if !usb_connected {
+            0
+        } else if let Some(last) = last_demo_ms {
+            if now.saturating_sub(last) <= DEMO_STALE_AFTER_MS {
+                2
+            } else {
+                3
+            }
+        } else {
+            1
+        };
+        if state != last_state {
+            lcd.rect(
+                0,
+                0,
+                128,
+                14,
+                match state {
+                    0 => BLUE,
+                    1 => CYAN,
+                    2 => GREEN,
+                    _ => RED,
+                },
+            );
+            // Explicit visual marker that this is a DEMO diagnostic, never
+            // an actual measured loop rate.
+            lcd.rect(4, 28, 120, 7, if state == 2 { ORANGE } else { BLACK });
+            last_state = state;
+        }
+
         let mut mask: u16 = 0;
         for (index, key) in keys.iter().enumerate() {
-            if key.is_low() { mask |= 1 << index; }
+            if key.is_low() {
+                mask |= 1 << index;
+            }
         }
         if mask != prior_mask {
-            // 9 on-screen squares: K1..K4 then left/down/right/center/up.
             for index in 0..9 {
                 let active = (mask & (1 << index)) != 0;
                 let x = 4 + (index % 3) * 40;
@@ -168,8 +324,16 @@ fn main() -> ! {
             }
             prior_mask = mask;
         }
-        blink = !blink;
-        lcd.rect(118, 115, 6, 6, if blink { GREEN } else { RED });
-        spin(1_000_000);
+
+        // Independent visible activity marker (does NOT certify a real-time loop).
+        indicator = !indicator;
+        let color = if invalid_frames > 0 && indicator {
+            ORANGE
+        } else if indicator {
+            GREEN
+        } else {
+            RED
+        };
+        lcd.rect(118, 115, 6, 6, color);
     }
 }
