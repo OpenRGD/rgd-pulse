@@ -132,8 +132,12 @@ fn serial_demo(path: &str, count: u32) -> Result<(), Box<dyn std::error::Error>>
         return Err("Pico HELLO not received. No demo frames were transmitted: verify the exact CDC device path, DTR and firmware".into());
     }
 
-    println!("Sending {count} explicit DEMO frames at 10Hz");
+    println!("Sending {count} explicit DEMO frames, at up to 10Hz");
+    println!("Expecting one CRC-checked RX DemoAck for every accepted DEMO frame.");
+    let mut confirmed: u32 = 0;
+    let mut unexpected: u32 = 0;
     for i in 0..count {
+        let sent_at = Instant::now();
         let frame = Frame {
             kind: Kind::DemoTicks,
             sequence: i + 1,
@@ -145,9 +149,65 @@ fn serial_demo(path: &str, count: u32) -> Result<(), Box<dyn std::error::Error>>
             "TX DEMO seq={} synthetic_ticks={}",
             frame.sequence, frame.value
         );
-        thread::sleep(Duration::from_millis(100));
+
+        let deadline = Instant::now() + Duration::from_millis(450);
+        let mut acknowledged = false;
+        while Instant::now() < deadline {
+            match port.read(&mut buf) {
+                Ok(len) => {
+                    for byte in buf[..len].iter().copied() {
+                        if let Some(result) = decoder.push(byte) {
+                            match result {
+                                Ok(receipt)
+                                    if receipt.kind == Kind::DemoAck
+                                        && receipt.sequence == frame.sequence
+                                        && receipt.value == frame.value =>
+                                {
+                                    acknowledged = true;
+                                    confirmed += 1;
+                                    println!(
+                                        "RX ACK seq={} validated_ticks={}",
+                                        receipt.sequence, receipt.value
+                                    );
+                                }
+                                Ok(_) | Err(_) => {
+                                    unexpected += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(error) => return Err(Box::new(error)),
+            }
+            if acknowledged {
+                break;
+            }
+        }
+
+        if !acknowledged {
+            eprintln!(
+                "NO ACK for DEMO seq={} (check Pico receive path / USB hub)",
+                frame.sequence
+            );
+        }
+
+        // Cap the send rate at 10Hz; a delayed ACK slows transmission rather
+        // than overflowing the Pico's small CDC endpoint buffers.
+        if let Some(wait) = (sent_at + Duration::from_millis(100))
+            .checked_duration_since(Instant::now())
+        {
+            thread::sleep(wait);
+        }
     }
-    println!("Finished. Pico should enter STALE after ~1 second without incoming frames.");
+    println!("PULSE ACK SUMMARY: {confirmed}/{count} confirmed, {unexpected} unexpected frames");
     println!("Do not interpret demo values as Somatic loop performance.");
+    if confirmed != count {
+        return Err(format!(
+            "Incomplete USB delivery: {confirmed}/{count} DEMO frames acknowledged by Pico"
+        )
+        .into());
+    }
+    println!("PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.");
     Ok(())
 }
