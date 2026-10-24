@@ -28,7 +28,9 @@
 
 ## INPUT LAB (PULSE-0.2C diagnostic candidate)
 
-If joystick actions are visually ambiguous, **hold K1 + K4 for about 1.2 seconds** to enter a *local, read-only* GPIO diagnostic. Release the keys. Move each joystick direction once; the screen shows **RAW PIN GPnn** and its current **FW MAP** interpretation side by side, plus held/released status and a press counter. Tap each K key individually to confirm its physical GPIO. Hold K1+K4 again to exit. Normal K1–K4/joystick page navigation is suppressed while the lab is open. Only after verifying raw pins should the software direction mapping be corrected.
+**First physical results reported 2026-10-24:** joystick physical UP=GP18, DOWN=GP20, LEFT=GP16, RIGHT=GP19, CLICK=GP17. K1–K4 are reported all correct. The `pulse_ui::landscape_action` software map now matches these observations; **the newly mapped firmware is not yet physically re-verified**. GP17 (CLICK) and GP18 (UP) are especially worth repeating twice because they disagree with the initial vendor-derived orientation guess.
+
+To recheck the mapping, **hold K1 + K4 for about 1.2 seconds** to enter a *local, read-only* GPIO diagnostic. Release the keys. Move each joystick direction once; the screen shows **RAW PIN GPnn** and its newly mapped **FW MAP** interpretation side by side, plus held/released status and a press counter. Tap each K key individually to confirm its physical GPIO. Hold K1+K4 again to exit. Normal K1–K4/joystick page navigation is suppressed while the lab is open.
 
 See [PULSE-0.2C INPUT LAB BENCH](../../docs/PULSE-0.2C-INPUT-LAB-BENCH.md) for a reproducible five-direction test and a concise report format. This mode sends **no hardware, CAN or actuator commands**, and has no remote USB control endpoints.
 
@@ -59,7 +61,7 @@ Power **only** from the Pico's Micro-USB port via a real data hub. If flashing, 
 
 ## Still unverified on physical 0.2B firmware
 
-- Physical 0.2B first flash confirmed splash, graphics and K1–K4; **180° corrected display orientation (0x60)**, RGB/BGR order, X/Y offsets, clipping and logical joystick direction mapping still need validation.
+- Physical 0.2B first flash confirmed splash, graphics and K1–K4. Physical INPUT LAB then reported all five joystick GPIOs; **the updated logical direction mapping still needs post-flash acceptance**, especially GP18=UP and GP17=CLICK. ST7735S 0x60 rotation, RGB/BGR, X/Y offsets and clipping need their own physical confirmation.
 - Actual redraw latency and joysticks during simultaneous USB traffic.
 - 3/3 repeated serial opens, 100/100 ACK and cable disconnect/reconnect regressions.
 - Real Somatic loop measurement, Chronograph provenance/Chronon data, calibrated IMU, full joint mapping and measured voltage.
