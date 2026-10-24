@@ -15,5 +15,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
-      - name: Check RP2040 firmware
-        run: cargo check --release
+      - name: Build RP2040 firmware ELF (linker included)
+        run: cargo build --release
