@@ -86,9 +86,10 @@ Confirm the actual Pico USB device path through udev before using the demo comma
 
 ```bash
 cd ~/openrgd/rgd-pulse
+PICO_PORT="/dev/serial/by-path/REPLACE_WITH_VERIFIED_PICO_ALIAS"
 for attempt in 1 2 3; do
   printf '\n=== CDC session %s ===\n' "$attempt"
-  cargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/<VERIFIED_PICO_PATH> 20 || break
+  cargo run -p pulse-bridge -- serial-demo "$PICO_PORT" 20 || break
   sleep 2
 done
 ```
