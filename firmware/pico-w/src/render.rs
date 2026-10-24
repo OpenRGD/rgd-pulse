@@ -36,6 +36,14 @@ const GREEN: Rgb565 = Rgb565::new(10, 59, 16);
 const AMBER: Rgb565 = Rgb565::new(31, 38, 3);
 const RED: Rgb565 = Rgb565::new(31, 13, 9);
 
+// Literal, full-intensity RGB565 flag swatches: bypass visual role mapping.
+// In particular, the third flag bar MUST look red on the physical ST7735S.
+// A BLUE third bar indicates the panel's RGB/BGR bit (MADCTL bit 3)
+// probably needs a dedicated hardware color-order calibration.
+const ITALIA_GREEN: Rgb565 = Rgb565::new(0, 63, 0);
+const ITALIA_WHITE: Rgb565 = Rgb565::new(31, 63, 31);
+const ITALIA_RED: Rgb565 = Rgb565::new(31, 0, 0);
+
 pub struct Frame<'a> {
     pub data: &'a mut [u16; PIXELS],
     /// Theme is visual only. All four pages keep identical data contracts.
@@ -80,13 +88,16 @@ fn palette(id: SkinId) -> SkinPalette {
             positive: Rgb565::new(11, 55, 17),
         },
         SkinId::Italia => SkinPalette {
-            bg: Rgb565::new(2, 4, 6),
-            panel: Rgb565::new(5, 11, 11),
-            border: Rgb565::new(12, 22, 21),
-            text: Rgb565::new(31, 63, 31),
-            muted: Rgb565::new(12, 28, 19),
-            accent: Rgb565::new(6, 48, 17),
-            positive: Rgb565::new(7, 55, 17),
+            // Neutral grays (R/31 ~= G/63 ~= B/31): the former tinted
+            // blue-black panels looked purple on the physical panel.
+            // Green is now visually dominant instead of blue/teal.
+            bg: Rgb565::new(2, 4, 2),
+            panel: Rgb565::new(6, 12, 6),
+            border: Rgb565::new(13, 26, 13),
+            text: ITALIA_WHITE,
+            muted: Rgb565::new(17, 34, 17),
+            accent: ITALIA_GREEN,
+            positive: Rgb565::new(1, 58, 1),
         },
     }
 }
@@ -215,9 +226,10 @@ fn demo_chart(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, state: &UiState
             line(f, x + 1, y + 2, x + 1, y + h as i32 - 2, MUTED);
         }
         ChromeStyle::Tricolore => {
-            fill(f, x + 1, y + 1, 2, 3, GREEN);
-            fill(f, x + 3, y + 1, 2, 3, WHITE);
-            fill(f, x + 5, y + 1, 2, 3, RED);
+            // Distinct flag colors, not translated green/status roles.
+            fill(f, x + 1, y + 1, 4, 4, ITALIA_GREEN);
+            fill(f, x + 5, y + 1, 4, 4, ITALIA_WHITE);
+            fill(f, x + 9, y + 1, 4, 4, ITALIA_RED);
         }
         ChromeStyle::Clean => {}
     }
@@ -227,9 +239,12 @@ fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData) {
     fill(f, 0, 0, 128, 16, PANEL);
     fill(f, 0, 15, 128, 1, CYAN);
     if f.skin == SkinId::Italia {
-        fill(f, 0, 15, 42, 1, GREEN);
-        fill(f, 42, 15, 44, 1, WHITE);
-        fill(f, 86, 15, 42, 1, RED);
+        // Full-width, FOUR-pixel tricolore (not the barely visible 1px
+        // stripe in the first skin). Literal swatches double as a check
+        // of the panel's R/B ordering without changing all other skins.
+        fill(f, 0, 12, 42, 4, ITALIA_GREEN);
+        fill(f, 42, 12, 44, 4, ITALIA_WHITE);
+        fill(f, 86, 12, 42, 4, ITALIA_RED);
     }
     if f.skin == SkinId::Chrome99 {
         line(f, 0, 0, 127, 0, WHITE);
@@ -533,9 +548,12 @@ pub fn render_skin_settings(f: &mut Frame<'_>, settings: &Settings) {
             line(f, 13, 69, 105, 69, WHITE);
         }
         ChromeStyle::Tricolore => {
-            fill(f, 12, 69, 30, 6, GREEN);
-            fill(f, 42, 69, 30, 6, WHITE);
-            fill(f, 72, 69, 30, 6, RED);
+            // Three large literal GREEN / WHITE / RED swatches.
+            // If the right swatch appears BLUE, do not guess a different
+            // palette: verify MADCTL RGB/BGR bit on the actual hardware.
+            fill(f, 12, 66, 30, 12, ITALIA_GREEN);
+            fill(f, 42, 66, 30, 12, ITALIA_WHITE);
+            fill(f, 72, 66, 30, 12, ITALIA_RED);
         }
         ChromeStyle::Clean => {
             for i in 0..9 {
