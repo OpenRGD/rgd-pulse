@@ -15,7 +15,7 @@ embassy-usb = "0.4"
 embassy-futures = "0.1"
 embassy-time = "0.4"
 static_cell = "2"
-pulse-protocol = { path = "../../../crates/pulse-protocol" }
+pulse-protocol = { path = "../../crates/pulse-protocol" }
 
 [profile.release]
 debug = 2

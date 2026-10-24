@@ -105,7 +105,7 @@ pub fn crc16_ccitt_false(bytes: &[u8]) -> u16 {
 
 /// Incremental CDC byte-stream decoder. A USB packet is NOT a Pulse frame
 /// boundary: bytes may arrive fragmented, concatenated or after garbage.
-/// 
+///
 /// Accepts no commands, allocates no memory and recovers after CRC errors.
 pub struct StreamDecoder {
     buffer: [u8; FRAME_LEN],

@@ -4,8 +4,7 @@ use std::{
     env,
     fmt::Write as _,
     io::{Read, Write},
-    process,
-    thread,
+    process, thread,
     time::{Duration, Instant},
 };
 
@@ -142,7 +141,10 @@ fn serial_demo(path: &str, count: u32) -> Result<(), Box<dyn std::error::Error>>
             value: (i + 1) * 100,
         };
         port.write_all(&encode(frame))?;
-        println!("TX DEMO seq={} synthetic_ticks={}", frame.sequence, frame.value);
+        println!(
+            "TX DEMO seq={} synthetic_ticks={}",
+            frame.sequence, frame.value
+        );
         thread::sleep(Duration::from_millis(100));
     }
     println!("Finished. Pico should enter STALE after ~1 second without incoming frames.");
