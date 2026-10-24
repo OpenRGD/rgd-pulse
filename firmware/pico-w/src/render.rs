@@ -251,19 +251,28 @@ fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData) {
     }
     small(f, "RGD", 4, 4, CYAN);
     small(f, ui.page.label(), 26, 4, WHITE);
-    // One key letter + last digit of a press counter; advances even when a
-    // selected row is already at the beginning/end.
+    // K buttons show their *physical identity* K1/K2/K3/K4, not an input
+    // event sequence number (which previously misleadingly displayed K5,
+    // K6 ... as though there were additional dashboards). For joystick
+    // gestures only, the digit remains a rolling input-feedback counter.
     if let Some(action) = ui.last_action {
-        let key = match action {
-            Action::Up => "U",
-            Action::Down => "D",
-            Action::Left => "L",
-            Action::Right => "R",
-            Action::Click => "C",
-            Action::Page(_) => "K",
-        };
         let mut event: String<5> = String::new();
-        let _ = write!(event, "{}{}", key, ui.input_count % 10);
+        match action {
+            Action::Page(page) => {
+                let _ = event.push_str(page.physical_key_label());
+            }
+            _ => {
+                let direction = match action {
+                    Action::Up => "U",
+                    Action::Down => "D",
+                    Action::Left => "L",
+                    Action::Right => "R",
+                    Action::Click => "C",
+                    Action::Page(_) => unreachable!(),
+                };
+                let _ = write!(event, "{}{}", direction, ui.input_count % 10);
+            }
+        }
         fill(f, 80, 2, 17, 11, BORDER);
         small(f, &event, 83, 4, WHITE);
     }
