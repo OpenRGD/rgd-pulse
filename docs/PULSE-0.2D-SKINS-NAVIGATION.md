@@ -46,7 +46,7 @@ K1=GP8, K2=GP4, K3=GP3, K4=GP2. No joystick mappings changed in 0.2D. K1–K4 al
 | **RGD Classic** | `rgd-classic` | Existing dark navy/cyan look, clean framed graphs |
 | **Phosphor** | `phosphor` | Deep green-black phosphor CRT/oscilloscope palette, discrete trace points |
 | **Chrome 99** | `chrome-99` | Late-1990s metallic chrome/cobalt accents, beveled chart edges |
-| **Italia** | `italia` | Graphite-green instrumentation with a small green/white/red stripe |
+| **Italia** | `italia` | Neutral charcoal panels, dominant saturated emerald-green accents and a clearly visible green/white/red flag (4px top strip plus 12px settings swatches) |
 
 These are **original visual styles**, not copyrighted Winamp artwork. All dashboards use the same `pulse-ui::UiState`, `RenderData`, USB protocol and safety/provenance labels. A skin changes **palette, panel chrome and chart decoration**, never measurement values, units, timestamps, severity classes or acceptance criteria. Explicit `DEMO` remains visible under every skin; `AMBER` warnings and `RED` error indications are not recolored into green.
 
@@ -68,6 +68,30 @@ Potential future `openrgd.pulse-skin.v0.1-candidate` contract:
 - explicit immutable package signature/version and Console permission model before any OTA/user skin import.
 
 No arbitrary script/plugin executes on Pico; no unbounded images/fonts are imported via CDC. A future device-preference handshake could sync selected `skin_id` to the OpenRGD Console and persist it outside the microcontroller, but requires a reviewed, independent protocol version and authenticated/pinned device identity. No claim that this is already implemented.
+
+## PULSE-0.2D.1 — Italia visual contrast fix / RGB-BGR gate (operator report, 2026-10-24)
+
+After the first hardware trial of the four skin options, the operator reported that **Italia appeared purple, black and blue**, rather than green/white/red. This report **does not** prove a controller wiring problem or identify which displayed pixels suffered an incorrect channel ordering.
+
+**Confirmed code/design cause:** the initial Italia preset was mostly extremely dark, blue-green-tinted RGB565 colors (`bg = 2,4,6`; `panel = 5,11,11`; `border = 12,22,21` in 5/6/5 channels), with desaturated green accent and only a 1px-wide tricolore header stripe. It was not recognizably Italian even if the panel reproduced every RGB565 channel correctly.
+
+**Source correction committed** in the active `feat/pulse-0.2d-navigation-skins` branch:
+- Neutral near-black charcoal backgrounds and panels with matched R/G/B intensities; avoid purple/blue tint while preserving readability.
+- Strong **true RGB565 emerald** accent `(0,63,0)`, bright white `(31,63,31)`, and explicit red `(31,0,0)`.
+- 4px tricolore header across all four dashboards, 12px-tall flag preview in `SETTINGS→SKINS`, plus a larger three-color detail in the graphs.
+- Literal flag colors bypass the semantic-theme `GREEN/WHITE/RED` palette-role mapper. Warning/error categories retain their semantic colors; no telemetry or control behavior changed.
+
+**Potential physical issue deliberately *not* changed yet:** the ST7735S `MADCTL=0x60` uses RGB ordering (bit 3 = 0). The controller has an independent RGB/BGR color-filter selector at bit 3 (`0x08`); switching to `0x68` would swap red/blue **globally** without changing rotation, if and only if a physical calibration proves the panel requires BGR. The current firmware also issues `INVON=0x21` from earlier verified bring-up; panel inversion/gamma may influence appearance, but is not diagnosed by one subjective color report. Do **not** change inversion or RGB/BGR globally based only on the Italia palette report.
+
+### Physical color-test acceptance
+
+1. Flash the updated branch on **Pico only**, keep joystick LEFT and K1–K4 RIGHT.
+2. Open K2+K3 SETTINGS→SKINS, preview **Italia** and inspect the **three large swatches left-to-right**.
+3. They must be recognizable as **GREEN – WHITE – RED**, with **RED on the RIGHT**. On any normal dashboard in Italia skin, verify the header band is also green/white/red and the data panels are neutral charcoal with green accents.
+4. **If the third/right swatch is BLUE or PURPLE**, report that explicitly; that is actionable evidence of RGB/BGR mismatch or another physical color problem. Prefer a clear photo of the LCD displaying the three flag swatches, then test the `MADCTL BGR` bit in a separate, hardware-scoped color-calibration wave.
+5. Verify Classic/Phosphor/Chrome 99 remain legible. Run a basic 20/20 synthetic USB ACK regression if the display appears responsive.
+
+**Until this post-fix physical check passes, the revised Italia palette is a code candidate, not an accepted calibrated skin.**
 
 ## Physical bench checklist
 
