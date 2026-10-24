@@ -7,7 +7,7 @@ use embassy_rp::{
     spi::{Blocking, Spi},
 };
 use embassy_time::Timer;
-use pulse_ui::color_lab::ColorMode;
+use pulse_ui::color_lab::{ColorMode, VALIDATED_BOOT_MODE};
 
 const LCD_W: u16 = 128;
 const LCD_H: u16 = 128;
@@ -22,9 +22,10 @@ const Y_OFFSET: u16 = 3;
 // orientation 0x60 (MX|MV) flips the displayed image by 180 degrees,
 // without changing the page controls or the framebuffer coordinates.
 // Verify on the physical ST7735S; X/Y RAM offsets remain provisional.
-// ColorLab preserves the validated MX|MV orientation 0x60, toggling only
-// MADCTL's BGR bit (0x08) and INVON/INVOFF. Firmware boots in the previous
-// legacy mode until physical testing selects the true panel configuration.
+// Operator-verified 2026-10-24: mode 4 (MADCTL=0x68, INVOFF=0x20)
+// displays correct GREEN / WHITE / RED, without changing MX|MV.
+// Startup and any reboot now select that mode. The on-device Color Lab
+// still permits testing all four settings in RAM, without XIP flash writes.
 
 pub struct Lcd<'a> {
     spi: Spi<'a, SPI0, Blocking>,
@@ -76,7 +77,9 @@ impl<'a> Lcd<'a> {
         self.cmd(0x11); // exit sleep, ST7735S needs >=120ms
         Timer::after_millis(140).await;
         self.cmd(0x3A); self.data(&[0x05]); // 16-bit RGB565
-        self.apply_color_mode(ColorMode::InvertedRgb); // previously flashed behavior
+        // Power-on hardware profile verified with real green/white/red
+        // swatches. Apply before splash so startup colors are also correct.
+        self.apply_color_mode(VALIDATED_BOOT_MODE);
         self.cmd(0x13); // normal display mode
         self.cmd(0x29); // display on
 
