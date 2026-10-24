@@ -54,6 +54,47 @@ PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.
 
 **Remaining acceptance:** consecutive serial-demo invocations without power-cycle, repeated DTR close/open, USB unplug/replug recovery, 100/100 or longer-frame run, screen progress/stale color and 9 input responsiveness while USB active. Panel RGB/BGR mapping is still unverified.
 
+## PULSE-0.1C.1 — Candidate reconnect hardening
+
+After the first successful 20/20 hardware ACK run, the operator reported needing a **power-cycle before that successful run**. Upstream Embassy USB 0.4 CDC implementation exposes `CdcAcmClass::dtr()`; its `wait_connection()` only waits for an enabled USB endpoint and **does not wait for the host's DTR**. Closing and reopening a serial port can leave the endpoint enabled, retaining the old session in the initial firmware.
+
+Candidate repair in this branch:
+- Pico checks `cdc.dtr()` at bounded intervals; when false, resets old sequence, decoder and live state.
+- Host deliberately holds DTR low for 300 ms after opening before asserting it, ensuring the device sees a new session edge.
+- Pico should emit a new `Hello` on every serial port reopening without unplugging the USB cable.
+
+**This is a plausible mechanism, not a confirmed diagnosis of the original power-cycle.** Reflash the candidate and test repeated sessions physically.
+
+### Recovery acceptance sequence (USB-only, never actuator CAN)
+
+First, with the existing firmware still loaded, optionally repeat `serial-demo` three times without touching the USB cable to characterize the prior behavior. Then upgrade Pico and host from the latest branch and run:
+
+```bash
+cd ~/openrgd/rgd-pulse
+git fetch origin
+git switch feat/pulse-0.1c-usb-cdc
+git pull --ff-only
+cargo test --workspace
+
+cd firmware/pico-w
+cargo build --release
+elf2uf2-rs target/thumbv6m-none-eabi/release/pulse-pico-w pulse-pico-w.uf2
+# Flash manually via Pico BOOTSEL and RPI-RP2 (see prior instructions).
+```
+
+Confirm the actual Pico USB device path through udev before using the demo command; USB hub paths can change. Perform three **separate** demo invocations without physical power-cycle (replace `<VERIFIED_PICO_PATH>` with the real alias):
+
+```bash
+cd ~/openrgd/rgd-pulse
+for attempt in 1 2 3; do
+  printf '\n=== CDC session %s ===\n' "$attempt"
+  cargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/<VERIFIED_PICO_PATH> 20 || break
+  sleep 2
+done
+```
+
+Each run must show `Pico HELLO OK`, `20/20 confirmed`, `0 unexpected frames`. Verify a later count-100 run and USB unplug/replug independently, then check buttons/joystick under active traffic. Capture any failure **before** power-cycling.
+
 ## Upgrade to USB CDC
 
 On the Ubuntu mini-PC, use the existing `feat/pulse-0.1c-usb-cdc` branch (stacked on `feat/pulse-0.1a-foundation`):
