@@ -106,7 +106,7 @@ Numbers above are **illustrative** (e.g. IMU -4.6°, 1000 Hz target), never curr
 
 **Hero:** *measured* observed loop frequency (Hz) with data age; separately show **TARGET 1000 Hz** (a configured engineering goal, not a performance claim). Secondary metrics: p95 timing jitter (µs), deadline misses, maximum observed execution budget (if instrumented). The graph shows one selectable metric at a time (Hz, jitter, duration) and a subtle target line; chart points come from actual host/runtime instrumentation, **not** USB arrival intervals.
 
-Controls: UP/DOWN changes plotted metric; LEFT/RIGHT cycles 5s / 30s / 60s history; joystick CLICK toggles a frozen *view only* (does not pause the runtime). Read-only. When not instrumented, label `NO LOOP SOURCE`, don't calculate or invent jitter.
+Controls in 0.2B: UP/DOWN changes plotted metric; LEFT/RIGHT cycles 5s / 15s / 30s illustrative history windows; joystick CLICK enters **focus/zoom**. While focused, UP/DOWN cycles x1/x2/x4/x8 and LEFT/RIGHT pans within the graph history; CLICK closes the focus. This never pauses the real runtime. When not instrumented, label `NO LOOP SOURCE`, don't calculate or invent jitter. All waveforms in this implementation are expressly **DEMO fixtures**, not real historical samples.
 
 ## K2 — CHRONONS / timeline and detail
 
@@ -120,7 +120,7 @@ Selecting a record may send a non-actuating `chronon.inspect` UI request to the 
 
 **Hero:** roll/pitch values in degrees from the sensor's declared frame, `RAW / SENSOR XYZ` badge. Small 2D crosshair or tilt/vector widget **must say SENSOR**, not `robot balanced` or `world horizon`, until the mounting extrinsic is physically verified and calibrated.
 
-Additional: gyro magnitude or selected X/Y/Z axis (°/s), acceleration vector norm (g or m/s²), temperature (only when corresponding WIT field actually exists), optional Euler yaw marked `YAW* UNCAL`. Primary chart: selectable 10s/30s roll, pitch, angular speed trend. UP/DOWN selects signal; LEFT/RIGHT changes graph window; CLICK opens per-axis numeric details/calibration status.
+Additional: gyro magnitude or selected X/Y/Z axis (°/s), acceleration vector norm (g or m/s²), temperature (only when corresponding WIT field actually exists), optional Euler yaw marked `YAW* UNCAL`. Primary chart: selectable 10s/30s roll, pitch, angular speed trend. UP/DOWN selects signal; LEFT/RIGHT changes graph window; CLICK enters a larger **DEMO chart focus**. While focused, UP/DOWN changes x1/x2/x4/x8 zoom and LEFT/RIGHT pans. Verified live sensor-axis details remain an adapter wave, not part of this fixture.
 
 **Existing Paky-01 source:** the `italiarobotica/paky-01` branch `feat/imu-console-bridge` already contains passive WIT/JY901 UART decoding and candidate Console observation publishing around 10Hz. It publishes sensor-frame readings and host *receive timestamps* to the loopback Console API. Do **not** open the same CH340 `/dev/ttyUSB0` independently from Pulse: one serial reader at a time, and the CH340 port is not Pulse's `ttyACM`. Pulse must subscribe to a nonblocking host-side fan-out from an approved Console/IMU service adapter; avoid duplicating a sensor process. Current transform/quaternion and yaw calibration are missing. These readings are observations only, never authorized for motor control.
 
@@ -139,9 +139,9 @@ Additional: gyro magnitude or selected X/Y/Z axis (°/s), acceleration vector no
 
 | Page | UP/DOWN | LEFT/RIGHT | CLICK |
 |---|---|---|---|
-| K1 SOMATIC | Select Hz/jitter/execution graph | Choose 5/30/60 s | Freeze/unfreeze display snapshot, *not runtime* |
+| K1 SOMATIC | Select Hz/jitter/execution DEMO chart | Choose 5/15/30 s window | Enter/exit chart focus; in focus UP/DOWN zoom x1..x8 and LEFT/RIGHT pan |
 | K2 CHRONONS | Select older/newer entry | Filter ALL/OBS/PLAN/ACT/ERR | Open/close Chronon detail |
-| K3 IMU | Select roll/pitch/gyro/accel view | History 10/30 s | Sensor-axis detail / back |
+| K3 IMU | Select roll/pitch/gyro/accel fixture view | History 10/20/30 s | Enter/exit chart focus; in focus UP/DOWN zoom x1..x8 and LEFT/RIGHT pan |
 | K4 SYSTEM | Select motors/CAN/power/host tile | Move to previous/next subpanel | Expand selected tile / back |
 
 Debounce inputs and ensure K1..K4 always escape overlays. No joystick input can become a robot-motion or actuator command.
@@ -171,6 +171,10 @@ Debounce inputs and ensure K1..K4 always escape overlays. No joystick input can 
 
 - **LOCKED (operator request 2026-10-24):** Chronoscope HMI is physically landscape, joystick **LEFT**, four keys **RIGHT**; physically rotate the board +90° clockwise from the vendor portrait view, and compensate graphics -90° in native pixel coordinates (or equivalent validated MADCTL rotation), so content is upright.
 - Hardware test gate: verify physical clockwise mounting, K1..K4 top-to-bottom, calibrated MADCTL and raw-to-logical joystick axes before claiming the landscape implementation is complete.
+
+## 0.2B implementation proposal (stacked branch)
+
+The next branch `feat/pulse-0.2b-chronoscope-four-pages` adds `pulse-ui` navigation state with host unit tests, candidate hardware SPI LCD renderer and four on-device pages. It is still awaiting real 0.2B physical acceptance and does **not** read canonical Somatic/Chronon/IMU/voltage data. Zoom/pan acts on explicitly synthetic illustration samples.
 
 ## Decisions awaiting design sign-off
 

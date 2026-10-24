@@ -19,7 +19,8 @@ Somatic Runtime (out of scope) ---> host telemetry adapter (future)
 * `crates/pulse-protocol`: `no_std` fixed-size binary telemetry frame v1, CRC-16/CCITT-FALSE.
 * `crates/pulse-core`: host-side link and loop-progress observer with tests.
 * `crates/pulse-bridge`: synthetic offline demo and **candidate** USB CDC serial-demo with explicit device-path and HELLO handshake. No real Somatic Runtime integration.
-* `firmware/pico-w`: separate Embassy Rust workspace for the Seengreat 1.44-inch Rev 1.2 LCD, keys and candidate USB CDC.
+* `crates/pulse-ui`: `no_std` four-screen navigation, joystick focus/zoom, raw-to-landscape input mapping and host unit tests.
+* `firmware/pico-w`: Embassy Rust, SPI0 ST7735S landscape display, four DEMO dashboards and USB CDC ACK-compatible transport.
 * `hardware/boards/`: verified vendor pin mappings, revision and limitations.
 
 ## Host-side quick start
@@ -33,7 +34,7 @@ cargo run -p pulse-bridge -- demo 8
 
 ## Pico W bring-up
 
-See [firmware/pico-w/README.md](firmware/pico-w/README.md) and [PULSE-0.1C USB bench guide](docs/PULSE-0.1C-USB-BENCH.md). All nine inputs and the LCD startup were operator-verified on 2026-10-24; CDC operation still requires physical testing. Power only by **Pico Micro-USB**, disconnected from Paky-01 power/motors.
+See [firmware/pico-w/README.md](firmware/pico-w/README.md), [PULSE-0.1C USB hardware evidence](docs/PULSE-0.1C-USB-BENCH.md) and [PULSE-0.2B four-screen physical acceptance plan](docs/CHRONOSCOPE-0.2B-HARDWARE-BENCH.md). Previous firmware proved USB synthetic 100/100, DTR reopen 3/3 and button inputs; **the new 0.2B landscape firmware remains unverified on real hardware**. Power only by **Pico Micro-USB**, never Paky-01 power/motors.
 
 ## Repository authority
 
@@ -45,7 +46,7 @@ See [firmware/pico-w/README.md](firmware/pico-w/README.md) and [PULSE-0.1C USB b
 
 ## USB CDC prototype (candidate)\n\n```sh\n# Explicit port path, verified by udevadm. Never guess ttyACM0 on Paky-01.\ncargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/YOUR_PICO_PATH 20\n```\n\nOnly frames marked `DemoTicks` are transmitted, never real motor commands.\n\n## Chronoscope UI candidate (design only)
 
-The four-screen hardware HMI proposal (K1 SOMATIC / K2 CHRONONS / K3 IMU / K4 SYSTEM), **landscape mount with joystick LEFT and four K buttons RIGHT**, rotation-aware joystick gestures, compact charts and data provenance policy are specified in [PULSE-0.2A UI SPEC](docs/CHRONOSCOPE-0.2A-UI-SPEC.md). This is **not implemented**, does not change canonical contracts and does not turn synthetic telemetry into real measurements.
+The four-screen HMI design is in [PULSE-0.2A UI SPEC](docs/CHRONOSCOPE-0.2A-UI-SPEC.md). The stacked 0.2B candidate now implements K1 SOMATIC / K2 CHRONONS / K3 IMU / K4 SYSTEM, **joystick LEFT / K buttons RIGHT**, bounded graph focus/zoom, 128×128 framebuffer rendering and USB-first boot. **These pages are fixtures**, not real Somatic/Chronograph/IMU/motor telemetry. Follow [the 0.2B physical bench plan](docs/CHRONOSCOPE-0.2B-HARDWARE-BENCH.md) before accepting the new firmware.
 
 ## Planned waves
 
