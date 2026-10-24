@@ -17,7 +17,10 @@ use embedded_graphics::{
     text::{Baseline, Text},
 };
 use heapless::String;
-use pulse_ui::{Mode, Page, UiState};
+use pulse_ui::{
+    input_lab::{raw_gpio, InputLab},
+    landscape_action, Action, Mode, Page, UiState,
+};
 
 pub const PIXELS: usize = 128 * 128;
 const BG: Rgb565 = Rgb565::new(1, 2, 5);
@@ -311,4 +314,69 @@ pub fn splash(f: &mut Frame<'_>) {
     small(f,"PULSE / CHRONOSCOPE",10,66,CYAN);
     small(f,"OBSERVATION ONLY",19,84,AMBER);
     small(f,"NO MOTOR COMMANDS",18,101,MUTED);
+}
+
+
+/// Diagnostic page shows RAW pressed GPIO and the CURRENT SOFTWARE MAP
+/// separately. It does not infer physical joystick orientation.
+/// The operator moves each direction and notes whether the reported map
+/// matches the real motion. Data stays entirely on the Pico (no USB TX).
+fn input_action_name(raw: u8) -> &'static str {
+    match landscape_action(raw as usize) {
+        Some(Action::Page(Page::Somatic)) => "K1/LOOP",
+        Some(Action::Page(Page::Chronons)) => "K2/TIME",
+        Some(Action::Page(Page::Imu)) => "K3/IMU",
+        Some(Action::Page(Page::System)) => "K4/SYS",
+        Some(Action::Up) => "UP",
+        Some(Action::Down) => "DOWN",
+        Some(Action::Left) => "LEFT",
+        Some(Action::Right) => "RIGHT",
+        Some(Action::Click) => "CLICK",
+        None => "UNKNOWN",
+    }
+}
+
+pub fn render_input_lab(f: &mut Frame<'_>, lab: &InputLab) {
+    f.data.fill(BG.into_storage());
+    fill(f, 0, 0, 128, 17, PANEL);
+    fill(f, 0, 16, 128, 1, CYAN);
+    small(f, "RGD / INPUT LAB", 5, 4, WHITE);
+    small(f, "REAL GPIO", 78, 4, GREEN);
+
+    small(f, "MOVE JOYSTICK / KEYS", 7, 21, MUTED);
+    fill(f, 4, 33, 120, 55, PANEL);
+    stroke(f, 4, 33, 120, 55, BORDER);
+    fill(f, 64, 35, 1, 51, BORDER);
+    small(f, "RAW PIN", 10, 38, CYAN);
+    small(f, "FW MAP", 71, 38, AMBER);
+
+    if let Some(raw) = lab.last_raw {
+        let mut gpio: String<12> = String::new();
+        if let Some(pin) = raw_gpio(raw) {
+            let _ = write!(gpio, "GP{}", pin);
+        } else {
+            let _ = write!(gpio, "N/A");
+        }
+        big(f, &gpio, 9, 51, WHITE);
+        big(f, input_action_name(raw), 71, 51, CYAN);
+        small(
+            f,
+            if lab.last_held() { "HELD" } else { "RELEASED" },
+            10,
+            73,
+            if lab.last_held() { GREEN } else { MUTED },
+        );
+        small(f, "MAP: UNVERIFIED", 71, 75, AMBER);
+    } else {
+        big(f, "----", 9, 51, MUTED);
+        big(f, "----", 71, 51, MUTED);
+        small(f, "PRESS ONE AT A TIME", 11, 73, AMBER);
+    }
+
+    let mut count: String<24> = String::new();
+    let _ = write!(count, "PRESSES: {}", lab.events);
+    small(f, &count, 8, 95, WHITE);
+    small(f, "LAST INPUT PERSISTS", 8, 104, MUTED);
+    fill(f, 0, 114, 128, 14, PANEL);
+    small(f, "HOLD K1+K4: EXIT", 8, 117, AMBER);
 }
