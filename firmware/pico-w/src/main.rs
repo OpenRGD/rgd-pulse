@@ -218,9 +218,22 @@ async fn main(spawner: Spawner) {
     let mut indicator = false;
 
     loop {
-        // Timer selection means physical buttons and LCD heartbeat remain
-        // usable even when the host has not opened the USB serial device.
-        if !usb_connected {
+        // The CDC bulk endpoints remain enabled after the host closes the
+        // serial port. Embassy wait_connection() only checks endpoint state,
+        // NOT host DTR; it cannot detect close/reopen by itself.
+        //
+        // DTR gives each host serial session a new HELLO and clean decoder.
+        // A bounded timer keeps all nine buttons and LCD rendering alive
+        // even when the serial port is not open.
+        if !cdc.dtr() {
+            if usb_connected {
+                usb_connected = false;
+                decoder.reset();
+                last_demo_ms = None;
+                last_demo_sequence = None;
+            }
+            Timer::after_millis(75).await;
+        } else if !usb_connected {
             match select(cdc.wait_connection(), Timer::after_millis(120)).await {
                 Either::First(()) => {
                     usb_connected = true;
