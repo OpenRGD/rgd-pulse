@@ -6,7 +6,10 @@
 //! Operator reported native RGB565 [GREEN, WHITE, RED] showing as
 //! [MAGENTA, BLACK, YELLOW]. That corresponds to bitwise complement plus an
 //! R/B swap, but software must not assume the panel's actual transfer curve.
-//! Test all four INVON/INVOFF x RGB/BGR combinations using real swatches.
+//! Physical Color Lab acceptance on 2026-10-24: operator confirmed
+//! NORM / BGR (MADCTL=0x68, INVOFF=0x20) displays correct G/W/R.
+//! Keep all four reversible test modes while using the measured good
+//! configuration as the startup default on every Pico boot.
 
 use crate::Action;
 
@@ -27,9 +30,15 @@ pub enum ColorMode {
     NormalRgb = 1,
     /// Keep inversion, flip the red/blue order bit.
     InvertedBgr = 2,
-    /// Disable inversion, flip red/blue order (strong candidate).
+    /// Disable inversion, flip R/B order: physically verified on Paky-01.
     NormalBgr = 3,
 }
+
+/// Operator-verified display power-on configuration for the assembled
+/// Seengreat Rev 1.2 (joystick LEFT / K1-K4 RIGHT) on 2026-10-24.
+/// This constant is used by the LCD init, the Color Lab and the firmware
+/// runtime tracker to prevent mismatch or initial wrong-color splash.
+pub const VALIDATED_BOOT_MODE: ColorMode = ColorMode::NormalBgr;
 
 impl ColorMode {
     pub const fn from_index(value: u8) -> Self {
@@ -97,8 +106,8 @@ impl ColorLab {
     pub const fn new() -> Self {
         Self {
             open: false,
-            applied: ColorMode::InvertedRgb,
-            preview: ColorMode::InvertedRgb,
+            applied: VALIDATED_BOOT_MODE,
+            preview: VALIDATED_BOOT_MODE,
             chord_since_ms: None,
             consumed: false,
         }
@@ -173,6 +182,21 @@ mod tests {
     use crate::Page;
 
     #[test]
+    fn physical_color_calibration_is_the_boot_default() {
+        let c = ColorLab::new();
+        assert_eq!(VALIDATED_BOOT_MODE, ColorMode::NormalBgr);
+        assert_eq!(VALIDATED_BOOT_MODE.madctl(), 0x68);
+        assert_eq!(VALIDATED_BOOT_MODE.inversion_command(), 0x20);
+        assert_eq!(c.applied, VALIDATED_BOOT_MODE);
+        assert_eq!(c.preview, VALIDATED_BOOT_MODE);
+        assert_eq!(c.visual_mode(), VALIDATED_BOOT_MODE);
+        assert!(!c.open);
+        // After restoring the default (reboot), the old inverted mode is
+        // still testable by joystick navigation, but never the default.
+        assert_eq!(c.visual_mode().next(), ColorMode::InvertedRgb);
+    }
+
+    #[test]
     fn all_four_modes_keep_original_landscape_and_use_expected_commands() {
         for (mode, madctl, invert) in [
             (ColorMode::InvertedRgb, 0x60, 0x21),
@@ -217,19 +241,19 @@ mod tests {
         c.handle(Action::Right);
         c.handle(Action::Right);
         c.handle(Action::Right);
-        assert_eq!(c.preview, ColorMode::NormalBgr);
-        assert_eq!(c.applied, ColorMode::InvertedRgb);
+        assert_eq!(c.preview, ColorMode::InvertedBgr);
+        assert_eq!(c.applied, ColorMode::NormalBgr);
         c.cancel();
-        assert_eq!(c.visual_mode(), ColorMode::InvertedRgb);
+        assert_eq!(c.visual_mode(), ColorMode::NormalBgr);
         c.observe(COLOR_LAB_CHORD, 2000, true);
         c.observe(COLOR_LAB_CHORD, 3200, true);
         c.observe(0, 3201, true);
         c.handle(Action::Left);
-        assert_eq!(c.preview, ColorMode::NormalBgr);
+        assert_eq!(c.preview, ColorMode::InvertedBgr);
         c.handle(Action::Click);
-        assert_eq!(c.applied, ColorMode::NormalBgr);
+        assert_eq!(c.applied, ColorMode::InvertedBgr);
         assert!(!c.open);
-        assert_eq!(c.visual_mode(), ColorMode::NormalBgr);
+        assert_eq!(c.visual_mode(), ColorMode::InvertedBgr);
     }
 
     #[test]
