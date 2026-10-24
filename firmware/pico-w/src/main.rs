@@ -89,17 +89,21 @@ async fn main(spawner: Spawner) {
         Output::new(p.PIN_13, Level::Low),
     );
 
-    // Verified GPIO order from 0.1B, remapped in pulse-ui to final landscape.
+    // RAW scan index -> electrical pin is unchanged since 0.1B.
+    // The separately tested pulse_ui::landscape_action() interprets these
+    // in the FINAL physical orientation; reported on 2026-10-24:
+    // GP18=UP, GP20=DOWN, GP16=LEFT, GP19=RIGHT, GP17=CLICK.
+    // Keep raw scanning independent of the operator-facing mapping.
     let keys = [
-        Input::new(p.PIN_8, Pull::Up),  // K1
-        Input::new(p.PIN_4, Pull::Up),  // K2
-        Input::new(p.PIN_3, Pull::Up),  // K3
-        Input::new(p.PIN_2, Pull::Up),  // K4
-        Input::new(p.PIN_16, Pull::Up), // old left -> operator up
-        Input::new(p.PIN_20, Pull::Up), // old down -> operator left
-        Input::new(p.PIN_17, Pull::Up), // old right -> operator down
-        Input::new(p.PIN_18, Pull::Up), // click
-        Input::new(p.PIN_19, Pull::Up), // old up -> operator right
+        Input::new(p.PIN_8, Pull::Up),  // index 0: K1
+        Input::new(p.PIN_4, Pull::Up),  // index 1: K2
+        Input::new(p.PIN_3, Pull::Up),  // index 2: K3
+        Input::new(p.PIN_2, Pull::Up),  // index 3: K4
+        Input::new(p.PIN_16, Pull::Up), // index 4: observed LEFT
+        Input::new(p.PIN_20, Pull::Up), // index 5: observed DOWN
+        Input::new(p.PIN_17, Pull::Up), // index 6: observed CLICK
+        Input::new(p.PIN_18, Pull::Up), // index 7: observed UP
+        Input::new(p.PIN_19, Pull::Up), // index 8: observed RIGHT
     ];
 
     static FRAME: StaticCell<[u16; PIXELS]> = StaticCell::new();
