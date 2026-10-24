@@ -103,7 +103,7 @@ async fn main(spawner: Spawner) {
     ];
 
     static FRAME: StaticCell<[u16; PIXELS]> = StaticCell::new();
-    let backing = FRAME.init([0u16; PIXELS]);
+    let backing = FRAME.init_with(|| [0u16; PIXELS]);
     let mut image = Framebuffer { data: backing };
 
     // Give the USB executor a turn before beginning non-critical LCD work.
