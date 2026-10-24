@@ -340,8 +340,8 @@ pub fn render_input_lab(f: &mut Frame<'_>, lab: &InputLab) {
     f.data.fill(BG.into_storage());
     fill(f, 0, 0, 128, 17, PANEL);
     fill(f, 0, 16, 128, 1, CYAN);
-    small(f, "RGD / INPUT LAB", 5, 4, WHITE);
-    small(f, "REAL GPIO", 78, 4, GREEN);
+    small(f, "RGD / INPUT", 5, 4, WHITE);
+    small(f, "RAW GPIO", 83, 4, GREEN);
 
     small(f, "MOVE JOYSTICK / KEYS", 7, 21, MUTED);
     fill(f, 4, 33, 120, 55, PANEL);
@@ -366,7 +366,7 @@ pub fn render_input_lab(f: &mut Frame<'_>, lab: &InputLab) {
             73,
             if lab.last_held() { GREEN } else { MUTED },
         );
-        small(f, "MAP: UNVERIFIED", 71, 75, AMBER);
+        small(f, "CHECK DIR", 72, 75, AMBER);
     } else {
         big(f, "----", 9, 51, MUTED);
         big(f, "----", 71, 51, MUTED);
