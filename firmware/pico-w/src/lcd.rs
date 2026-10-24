@@ -7,6 +7,7 @@ use embassy_rp::{
     spi::{Blocking, Spi},
 };
 use embassy_time::Timer;
+use pulse_ui::color_lab::ColorMode;
 
 const LCD_W: u16 = 128;
 const LCD_H: u16 = 128;
@@ -21,7 +22,9 @@ const Y_OFFSET: u16 = 3;
 // orientation 0x60 (MX|MV) flips the displayed image by 180 degrees,
 // without changing the page controls or the framebuffer coordinates.
 // Verify on the physical ST7735S; X/Y RAM offsets remain provisional.
-const MADCTL_LANDSCAPE_CANDIDATE: u8 = 0x60; // MX | MV
+// ColorLab preserves the validated MX|MV orientation 0x60, toggling only
+// MADCTL's BGR bit (0x08) and INVON/INVOFF. Firmware boots in the previous
+// legacy mode until physical testing selects the true panel configuration.
 
 pub struct Lcd<'a> {
     spi: Spi<'a, SPI0, Blocking>,
@@ -73,8 +76,7 @@ impl<'a> Lcd<'a> {
         self.cmd(0x11); // exit sleep, ST7735S needs >=120ms
         Timer::after_millis(140).await;
         self.cmd(0x3A); self.data(&[0x05]); // 16-bit RGB565
-        self.cmd(0x36); self.data(&[MADCTL_LANDSCAPE_CANDIDATE]);
-        self.cmd(0x21); // inversion on for this panel candidate
+        self.apply_color_mode(ColorMode::InvertedRgb); // previously flashed behavior
         self.cmd(0x13); // normal display mode
         self.cmd(0x29); // display on
 
@@ -86,6 +88,15 @@ impl<'a> Lcd<'a> {
             Timer::after_millis(35).await;
         }
         self.bl.set_high();
+    }
+
+    /// Change ONLY display color interpretation. MX|MV orientation,
+    /// address window offsets, physical controls and USB remain unchanged.
+    /// Commands are RP2040->ST7735S LCD SPI only; not robot commands.
+    pub fn apply_color_mode(&mut self, mode: ColorMode) {
+        self.cmd(0x36); // MADCTL
+        self.data(&[mode.madctl()]); // 0x60 RGB or 0x68 BGR
+        self.cmd(mode.inversion_command()); // INVOFF=0x20 / INVON=0x21
     }
 
     fn window(&mut self, x0: u16, y0: u16, x1: u16, y1: u16) {
