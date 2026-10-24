@@ -26,7 +26,7 @@ K1=GP8, K2=GP4, K3=GP3, K4=GP2. No joystick mappings changed in 0.2D. K1–K4 al
 - Joystick single press retains current selection/filter/zoom behavior.
 - Holding a **direction**: initial event immediately from GPIO edge; first auto-repeat after **440ms**, then intervals **240ms**, accelerating to **155ms** after 1.6s, and **100ms** after 3s of continuous hold. Release resets the delay. These are software *target timings*, not measured motor/display latency.
 - K1–K4 and joystick CLICK are **never auto-repeated**.
-- Header shows a tiny input event indicator (`U/D/L/R/C/K` plus rolling counter digit), even if the selected row cannot move. This is UI activity only, *not* evidence of Somatic loop progress.
+- Header shows **K1/K2/K3/K4 for the actual physical page key**; joystick actions show `U/D/L/R/C` plus a small rolling event digit, even at a selection boundary. There are **only four** top-level pages. `K5`, `K6`, etc. were a misleading input-count label in earlier 0.2D builds, **not additional dashboards**. This is UI activity only, never evidence of Somatic loop progress.
 - Retains operator-proven K1+K4 long hold (1.2s) to enter/exit **INPUT LAB**, which shows raw GPIO independently of the current mapping.
 
 **Open Settings / Skins:**
@@ -68,6 +68,16 @@ Potential future `openrgd.pulse-skin.v0.1-candidate` contract:
 - explicit immutable package signature/version and Console permission model before any OTA/user skin import.
 
 No arbitrary script/plugin executes on Pico; no unbounded images/fonts are imported via CDC. A future device-preference handshake could sync selected `skin_id` to the OpenRGD Console and persist it outside the microcontroller, but requires a reviewed, independent protocol version and authenticated/pinned device identity. No claim that this is already implemented.
+
+## PULSE-0.2D.2 — K5/K6 confusion fixed (operator report, 2026-10-24)
+
+The operator reported apparent extra `K5`, `K6` etc. while repeatedly pressing the K buttons. The firmware had always defined exactly **four dashboard pages**. A header input feedback widget incorrectly printed `"K" + (ui.input_count % 10)` for *all* four page buttons, causing the counter to look like additional screens.
+
+The renderer now uses `Page::physical_key_label()`:
+- physical K1 → `K1`, K2 → `K2`, K3 → `K3`, K4 → `K4`, regardless of how often pressed;
+- joystick UP/DOWN/LEFT/RIGHT/CENTER retains the input-event counter for visible feedback at selection boundaries.
+
+Only the feedback label changes; no GPIO mapping, page navigation, USB protocol, DEMO indicators, display rotation or robot wiring changed. `pulse-ui` unit test covers repeated page selections to catch regression. **Host tests and RP2040 firmware build passed.** Physical visual confirmation on the next flash remains desirable, not a new physical mapping calibration.
 
 ## PULSE-0.2D.1 — Italia visual contrast fix / RGB-BGR gate (operator report, 2026-10-24)
 
