@@ -15,5 +15,30 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
+          components: llvm-tools-preview
       - name: Build RP2040 firmware ELF (linker included)
         run: cargo build --release
+      - name: Assert RP2040 BOOT2 and vector table flash addresses
+        run: |
+          OBJDUMP="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/llvm-objdump"
+          "$OBJDUMP" -h target/thumbv6m-none-eabi/release/pulse-pico-w | tee /tmp/pulse-sections.txt
+          python3 - <<'PY'
+          from pathlib import Path
+
+          lines = Path("/tmp/pulse-sections.txt").read_text().splitlines()
+
+          def section(name):
+              for line in lines:
+                  parts = line.split()
+                  if len(parts) >= 4 and parts[1] == name:
+                      return int(parts[2], 16), int(parts[3], 16)
+              raise SystemExit(f"Missing ELF section: {name}")
+
+          boot_size, boot_address = section(".boot2")
+          vectors_size, vectors_address = section(".vector_table")
+          assert boot_size == 0x100, f"BOOT2 size {boot_size} != 256"
+          assert boot_address == 0x10000000, hex(boot_address)
+          assert vectors_address == 0x10000100, hex(vectors_address)
+          assert vectors_size > 0, "Empty Cortex-M vector table"
+          print("RP2040 boot layout validated: BOOT2 256 bytes @ 0x10000000; vectors @ 0x10000100")
+          PY
