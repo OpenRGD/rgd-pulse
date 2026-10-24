@@ -15,6 +15,8 @@ pub enum Kind {
     Event = 3,
     /// Explicitly synthetic fixture: never present as real loop telemetry.
     DemoTicks = 4,
+    /// Pico-to-host receipt of a valid, fresh DemoTicks frame (not real telemetry).
+    DemoAck = 5,
 }
 
 impl Kind {
@@ -24,6 +26,7 @@ impl Kind {
             2 => Some(Self::LoopTicks),
             3 => Some(Self::Event),
             4 => Some(Self::DemoTicks),
+            5 => Some(Self::DemoAck),
             _ => None,
         }
     }
@@ -197,6 +200,17 @@ mod tests {
     #[test]
     fn round_trip() {
         assert_eq!(decode(&encode(example())), Ok(example()));
+    }
+
+    #[test]
+    fn demo_ack_round_trip_preserves_sequence_and_value() {
+        let ack = Frame {
+            kind: Kind::DemoAck,
+            sequence: 77,
+            uptime_ms: 5000,
+            value: 7700,
+        };
+        assert_eq!(decode(&encode(ack)), Ok(ack));
     }
 
     #[test]
