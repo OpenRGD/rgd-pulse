@@ -257,6 +257,33 @@ async fn main(spawner: Spawner) {
                                 if newer {
                                     last_demo_sequence = Some(frame.sequence);
                                     last_demo_ms = Some(Instant::now().as_millis());
+
+                                    // Explicit acknowledgement to the host:
+                                    // only accepted, CRC-checked, fresh DEMO
+                                    // frames receive DemoAck. Never ACK motors,
+                                    // real Somatic telemetry, or unknown kinds.
+                                    let receipt = encode(Frame {
+                                        kind: Kind::DemoAck,
+                                        sequence: frame.sequence,
+                                        uptime_ms: Instant::now().as_millis() as u32,
+                                        value: frame.value,
+                                    });
+                                    if cdc.write_packet(&receipt).await.is_err() {
+                                        usb_connected = false;
+                                        last_demo_ms = None;
+                                        last_demo_sequence = None;
+                                        decoder.reset();
+                                        break;
+                                    }
+
+                                    // A monochrome progress bar makes received
+                                    // frames evident despite uncalibrated LCD colors.
+                                    // Update once per 10 frames to bound display I/O.
+                                    if frame.sequence % 10 == 0 {
+                                        let steps = (((frame.sequence - 1) % 100) / 10 + 1) as u8;
+                                        lcd.rect(4, 102, 120, 5, BLACK);
+                                        lcd.rect(4, 102, steps * 12, 5, WHITE);
+                                    }
                                 }
                             }
                             Some(Err(_)) => {
