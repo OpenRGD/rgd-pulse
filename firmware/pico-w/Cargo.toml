@@ -17,6 +17,9 @@ embassy-time = "0.4"
 static_cell = "2"
 portable-atomic = { version = "1", features = ["critical-section"] }
 pulse-protocol = { path = "../../crates/pulse-protocol" }
+pulse-ui = { path = "../../crates/pulse-ui" }
+embedded-graphics = "0.8"
+heapless = "0.8"
 
 [profile.release]
 debug = 2
