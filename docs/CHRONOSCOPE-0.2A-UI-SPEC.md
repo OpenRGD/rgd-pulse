@@ -10,7 +10,7 @@ The current firmware has already shown real LCD graphics, a blinking indicator, 
 
 ## Mandatory physical orientation — LANDSCAPE / controls LEFT–RIGHT
 
-**Accepted operator direction:** view the front of the Seengreat board with the **joystick on the LEFT** and the **four K1–K4 buttons on the RIGHT**. Compared with the vendor portrait photograph (K1–K4 above the LCD, joystick below), rotate the **whole assembled board clockwise by 90° as viewed from the display/front**. All UI lettering, numbers, charts and movement should read naturally in this physical landscape pose, not in the original upright portrait view.
+**Accepted operator direction:** view the front of the Seengreat board with the **joystick on the LEFT** and the **four K1–K4 buttons on the RIGHT**. Compared with the vendor portrait photograph (K1–K4 above the LCD, joystick below), rotate the **whole assembled board clockwise by 90° as viewed from the display/front**. All UI lettering, numbers, charts and movement should read naturally in this physical landscape pose, not in the original upright portrait view. **Because the physical PCB is rotated +90° clockwise, content drawn relative to the original portrait/native panel coordinate frame must be compensated by -90° counter-clockwise** (or the equivalent validated hardware MADCTL mapping).
 
 ```text
                   FRONT — OPERATOR'S LANDSCAPE VIEW
@@ -30,7 +30,7 @@ Schematic illustrates the **wide physical module**, not a wider LCD: the display
 ### Coordinate system and rotation ownership
 
 - Define the **logical display coordinate frame from the final operator view**: `x=0` at the display's left edge closest to joystick, `x=127` at the right edge closest to keys; `y=0` at the visual top, `y=127` at the bottom.
-- Rotate all graphics **90° clockwise relative to the vendor's original portrait reference**. The hardware-driver MADCTL orientation and ST7735S X/Y offsets must be validated on the actual panel. Don't commit an unverified MADCTL bit pattern; avoid double-rotating between the driver and UI layer.
+- **Physical assembly:** +90° clockwise (portrait vendor pose → joystick left, keys right). **Rendering compensation:** -90° counter-clockwise relative to the old panel/native coordinate frame, so the user sees upright landscape text. The hardware-driver MADCTL orientation and ST7735S X/Y offsets must be validated on the actual panel. Don't commit an unverified MADCTL bit pattern; avoid double-rotating between the driver and UI layer.
 - The 128×128 resolution **does not become 128×anything wider** on rotation. The physical PCB/module is landscape, not the pixel matrix aspect ratio.
 - All typography, chart axes, indicators, chronological direction and gestures refer to **the logical operator view**, regardless of raw native GPIO orientation.
 - Both UI and main 5-inch Console should use the same meaning for UP/DOWN, LEFT/RIGHT in their controls. A K1–K4 press always changes the top-level page, never triggers motion.
@@ -169,7 +169,7 @@ Debounce inputs and ensure K1..K4 always escape overlays. No joystick input can 
 
 ## Orientation design decision
 
-- **LOCKED (operator request 2026-10-24):** Chronoscope HMI is physically landscape, joystick **LEFT**, four keys **RIGHT**; rotate display content **90° clockwise** relative to the former portrait mockups.
+- **LOCKED (operator request 2026-10-24):** Chronoscope HMI is physically landscape, joystick **LEFT**, four keys **RIGHT**; physically rotate the board +90° clockwise from the vendor portrait view, and compensate graphics -90° in native pixel coordinates (or equivalent validated MADCTL rotation), so content is upright.
 - Hardware test gate: verify physical clockwise mounting, K1..K4 top-to-bottom, calibrated MADCTL and raw-to-logical joystick axes before claiming the landscape implementation is complete.
 
 ## Decisions awaiting design sign-off
