@@ -67,8 +67,7 @@ impl InputLab {
         let mut changed = false;
         if chord
             && !self.chord_consumed
-            && now_ms.saturating_sub(self.chord_since_ms.unwrap_or(now_ms))
-                >= HOLD_TO_TOGGLE_MS
+            && now_ms.saturating_sub(self.chord_since_ms.unwrap_or(now_ms)) >= HOLD_TO_TOGGLE_MS
         {
             self.active = !self.active;
             self.last_raw = None;
