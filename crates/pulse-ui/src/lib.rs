@@ -32,6 +32,17 @@ impl Page {
             Self::System => "SYSTEM",
         }
     }
+
+    /// Physical K identity: a page button is K1..K4, never a rolling count.
+    /// Independent from the diagnostic input-event counter.
+    pub const fn physical_key_label(self) -> &'static str {
+        match self {
+            Self::Somatic => "K1",
+            Self::Chronons => "K2",
+            Self::Imu => "K3",
+            Self::System => "K4",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -232,6 +243,23 @@ impl UiState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn page_feedback_uses_physical_key_not_press_counter() {
+        for (page, label) in [
+            (Page::Somatic, "K1"),
+            (Page::Chronons, "K2"),
+            (Page::Imu, "K3"),
+            (Page::System, "K4"),
+        ] {
+            assert_eq!(page.physical_key_label(), label);
+            let mut ui = UiState::new();
+            for _ in 0..20 {
+                ui.handle(Action::Page(page));
+                assert_eq!(ui.page.physical_key_label(), label);
+            }
+        }
+    }
 
     #[test]
     fn buttons_directly_select_all_four_pages() {
