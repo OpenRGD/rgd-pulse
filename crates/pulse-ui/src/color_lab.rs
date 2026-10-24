@@ -65,7 +65,7 @@ impl ColorMode {
     pub const fn inversion_command(self) -> u8 {
         match self {
             Self::InvertedRgb | Self::InvertedBgr => 0x21, // INVON
-            Self::NormalRgb | Self::NormalBgr => 0x20, // INVOFF
+            Self::NormalRgb | Self::NormalBgr => 0x20,     // INVOFF
         }
     }
 
@@ -109,7 +109,11 @@ impl ColorLab {
     }
 
     pub const fn visual_mode(&self) -> ColorMode {
-        if self.open { self.preview } else { self.applied }
+        if self.open {
+            self.preview
+        } else {
+            self.applied
+        }
     }
 
     /// Enabled only when the other local overlays are closed.
