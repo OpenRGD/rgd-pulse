@@ -1,6 +1,6 @@
 # PULSE-0.2C — Physical joystick and K1–K4 INPUT LAB
 
-**Status:** first physical input discovery **operator-reported on 2026-10-24**; remapped firmware candidate **not yet re-flashed or accepted**. No robot actuation, CAN access, IMU serial access or real Somatic telemetry.
+**Status:** corrected joystick mapping **operator-verified in Input Lab on the real Pico W, 2026-10-24** (five directions interpreted correctly; K1–K4 previously reported correct). Normal four-page navigation and USB CDC regression **remain separate acceptance gates**. No robot actuation, CAN access, IMU serial access or real Somatic telemetry.
 
 ## Operator-reported input evidence — 2026-10-24
 
@@ -23,6 +23,14 @@ Source of truth distinction:
 - The software action (`UP`, `CLICK`, etc.) is **our interpretation**, configurable and testable.
 - Firmware reflash/USB ACK/normal graphical navigation post-remap remain unverified until the next operator run.
 - This module has no motion commands; the physical controls remain local diagnostic UI only.
+
+## Operator physical re-test — PASS, 2026-10-24
+
+After loading the corrected `feat/pulse-0.2c-input-lab` firmware, the operator reported: **"mapping perfetto, ho appena testato e tutto è mappato correttamente ora nell'input lab"**.
+
+**Accepted for this wave:** the software interpretation of all five physical joystick gestures now matches the actual joystick-left/keys-right hardware as displayed by Input Lab: UP→GP18, DOWN→GP20, LEFT→GP16, RIGHT→GP19, CLICK→GP17. This also confirms the unexpectedly assigned **GP17 CLICK** and **GP18 UP** were functional in the operator's on-device test. K1–K4 were already reported correct and their mapping was not changed.
+
+**Not established by this specific report:** confirmation of all four dashboard pages *after exiting Input Lab*, click-to-focus/zoom behavior in the graphical pages, hold-to-exit chord, button hold-repeat behavior, and 20/20 USB HELLO/DEMO/ACK regression on this new firmware. Keep those gates separate; this firmware is still an informational, non-actuating observer.
 
 ## Why a dedicated screen?
 
@@ -137,5 +145,5 @@ Once the GPIO tests are complete, locate the actual Pulse USB CDC device by `lsu
 - [x] Five physical joystick gestures reported with distinct raw GPIOs (operator observation); GP18=UP, GP20=DOWN, GP16=LEFT, GP19=RIGHT, GP17=CLICK.
 - [x] Four physical K keys reported correct by the operator; independent GPIO-by-GPIO follow-up optional.
 - [x] Candidate logical mapping and Rust unit tests updated from operator observations.
-- [ ] Firmware reflashed, Input Lab re-tested (UP GP18 and CLICK GP17 twice each).
+- [x] Corrected firmware operator-tested in Input Lab: all five joystick directions/interpreted actions match physical movements, including GP18 UP and GP17 CLICK (number of repetitions not separately recorded).
 - [ ] Normal graphical navigation, K1..K4, joystick zoom and USB ACK run still operational after exiting diagnostics.
