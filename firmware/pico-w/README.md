@@ -1,13 +1,13 @@
 # Pico W + Seengreat ST7735S — Chronoscope firmware
 
-**Current candidate PULSE-0.2B** — read-only four-page **landscape** observer. Physical firmware tests are still pending. The 0.1C synthetic HELLO/DEMO/ACK hardware round-trip and DTR session recovery had passed separately; those checks must be re-run on this new firmware.
+**Current candidate PULSE-0.2B (180° landscape correction)** — read-only four-page observer. The first 0.2B firmware was physically flashed on 2026-10-24: OPENRGD splash and dashboard graphics appeared and K1–K4 worked, **but the screen content was upside-down**. A corrected orientation is now committed, awaiting another physical test. Earlier 0.1C USB synthetic ACK/DTR results remain separate and must be re-run on this version.
 
 ## Hardware
 
 - Raspberry Pi Pico W (RP2040), Seengreat PICO-1.44inch-LCD-Display Rev 1.2.
 - 128×128 square color TFT using **SPI0 hardware at 8MHz** (GP6 SCK, GP7 MOSI), ST7735S, GP5 CS / GP11 D-C / GP12 RESET / GP13 BL.
 - The assembled PCB is physically oriented **90° clockwise from vendor portrait**, so the **joystick is left and K1..K4 are right**, vertically stacked.
-- Firmware candidate MADCTL=0xA0 applies the inverse rotation to graphics. Pixel offsets still need physical validation; photos requested before claiming rotation acceptance.
+- Initial MADCTL=0xA0 (MY|MV) was **physically observed to draw upside-down** in the joystick-left/buttons-right pose. Updated candidate **MADCTL=0x60 (MX|MV)** flips the graphic content by 180° without changing input GPIO mappings. This correction, RGB/BGR order and pixel offsets still need physical confirmation.
 - Nine active-low buttons, already proven individually in earlier 0.1B hardware work.
 
 ## Navigation
@@ -53,7 +53,7 @@ Power **only** from the Pico's Micro-USB port via a real data hub. If flashing, 
 
 ## Still unverified on physical 0.2B firmware
 
-- Screen landscape direction, controller color order, X/Y offsets and text clipping.
+- Physical 0.2B first flash confirmed splash, graphics and K1–K4; **180° corrected display orientation (0x60)**, RGB/BGR order, X/Y offsets, clipping and logical joystick direction mapping still need validation.
 - Actual redraw latency and joysticks during simultaneous USB traffic.
 - 3/3 repeated serial opens, 100/100 ACK and cable disconnect/reconnect regressions.
 - Real Somatic loop measurement, Chronograph provenance/Chronon data, calibrated IMU, full joint mapping and measured voltage.
