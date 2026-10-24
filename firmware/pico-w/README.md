@@ -1,40 +1,53 @@
-# Pico W / Seengreat 1.44 Rev 1.2 bring-up (candidate)
+# Pico W + Seengreat ST7735S firmware
 
-The initial target is **visible colored stripes and 9 buttons/joystick squares**, not full Chronoscope. No real robot communication or motor functionality exists.
+**PULSE-0.1C candidate** — read-only synthetic USB CDC diagnostics. Display + all nine physical inputs were operator-tested successfully on 2026-10-24; USB is *not yet physically verified*. No motors, CAN, actuation, homing, calibration or E-stop are controlled here.
 
-## Requirements
+## Compile
 
-Rust stable, `thumbv6m-none-eabi` target, `elf2uf2-rs` (or another RP2040 ELF -> UF2 conversion tool). CI cross-compiles and links the RP2040 ELF; **the Seengreat Rev 1.2 display and button behavior have not yet been physically validated**. Timing, backlight polarity and display offsets remain hardware-test candidates.
-
-```sh
-rustup target add thumbv6m-none-eabi
-cargo install elf2uf2-rs
+```bash
+cd ~/openrgd/rgd-pulse
+git fetch origin
+git switch feat/pulse-0.1c-usb-cdc
+git pull --ff-only
 cd firmware/pico-w
+
+rustup target add thumbv6m-none-eabi
 cargo build --release
 elf2uf2-rs target/thumbv6m-none-eabi/release/pulse-pico-w pulse-pico-w.uf2
 ```
 
-Power only by Pico **Micro-USB**, completely disconnected from robot power. Hold **BOOTSEL on Pico**, connect Micro-USB to computer, confirm drive `RPI-RP2`, copy `pulse-pico-w.uf2` to the drive. The Pico should reboot automatically. BOOTSEL is **not** any of the LCD K1-K4 buttons.
+Compiled for Raspberry Pi Pico W (RP2040), Seengreat PICO-1.44inch-LCD-Display Rev1.2. The RP2040 BOOT2 location is validated in CI.
 
-The firmware first **pulses the backlight three times** (standalone execution marker; no LCD commands required), then initializes ST7735S and draws blue bands, a green strip, white input squares (orange when pressed) and a blinking indicator.
+## Flash / USB isolation
 
-### White screen / PULSE-0.1B.1 triage
+Power **only** via the Pico's Micro-USB socket from a real USB data hub, disconnected from all Paky-01 high-power electronics. Use BOOTSEL on the Pico (not K1–K4). Before copying UF2, confirm `RPI-RP2` is the Pico bootloader volume; another STM32 programmer on the mini-PC also exposes a removable drive.
 
-1. Use a powered **USB data** hub connected to the mini-PC; Pico only via Micro-USB, no robot power connections. Unplug before moving the Pico between hubs.
-2. Use the BOOTSEL button on the **Pico** to expose **RPI-RP2**; confirm the correct FAT volume before flashing (other boards, e.g. STM32, may also expose drives).
-3. Rebuild **after** `git pull --ff-only`, and recreate the UF2 so you do not unknowingly reflash the previous image.
-4. On reboot: **three obvious backlight pulses?** If yes, the RP2040 runs and GP13/backlight is responsive. If no, next verify the UF2/boot2 execution, Pico position, and GP13/backlight circuit; white alone does not prove execution.
-5. If pulses occur **but stripes/squares do not**, the next area is SPI command initialization, CS/DC/RESET contact, panel variant and pixel addressing. Buttons cannot give visual feedback without a working LCD.
-6. If the screen shows stripes, verify nine inputs individually; do not assume button failure from a white LCD.
+On reboot the LCD keeps its previously tested diagnostic grid, three backlight pulses and all inputs; later a CDC serial port should appear.
 
-The original firmware held after SLPOUT for only ~32 ms; this revision uses a conservative >120 ms delay for the ST7735S sleep-exit stabilization. Busy-loop timing is approximate (default RP2040 clocks), and will be replaced by a timer once bring-up succeeds.
+## USB states on the LCD
 
-It currently has no text renderer or USB CDC; fonts/navigation/communication come later.
+| Top stripe | Meaning |
+|---|---|
+| Blue | CDC not opened |
+| Cyan | CDC session opened, no valid synthetic `DemoTicks` |
+| Green | Recent valid synthetic frames |
+| Red | Synthetic stream stale for >900ms |
 
-If screen stays blank: unplug, reconfirm Pico position/orientation, then check LCD offsets, backlight polarity and panel initialization before reflashing. **Do not apply 12V/24V.**
+Orange thin stripe is a **DEMO-only** indicator, never real loop rate. RGB/BGR color order and panel offsets remain hardware candidates.
 
-Pin mapping: [board profile](../../hardware/boards/seengreat-pico-144-rev12.md). This demonstration deliberately bit-bangs SPI pins at low speed for first bring-up only; production code will use hardware SPI DMA.
+After locating the *exact* new USB CDC path with `udevadm info`, run:
 
-## No safety claims
+```bash
+cd ~/openrgd/rgd-pulse
+cargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/YOUR_REAL_PICO_PATH 20
+```
 
-No E-stop, motion safety, bus wiring, or motor calibration. No independent power buffer or black-box persistence.
+No data is sent before a valid Pico `HELLO`. The device accepts only framed `DemoTicks` in this wave. Bad CRC and replayed/old sequence numbers cannot refresh the demo status. Buttons remain purely local read-only inputs, not USB commands.
+
+See [the complete bench guide](../../docs/PULSE-0.1C-USB-BENCH.md) for discovery commands, limitations, and acceptance checklist.
+
+## Implementation limits
+
+The initial LCD transport still bit-bangs SPI for the first hardware proof, which briefly blocks the MCU's async executor during rectangle updates. The USB device stack runs as a separate Embassy task but is **not hard real time**. Production requires hardware SPI, bounded rendering, a unique USB device ID and independent timing characterization.
+
+The command protocol is not authenticated, and CRC16 detects accidental corruption only. Nothing in this demo provides a robot safety function.

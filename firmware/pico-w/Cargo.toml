@@ -9,7 +9,14 @@ publish = false
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 panic-halt = "0.2"
-embassy-rp = { version = "0.3", features = ["rp2040", "critical-section-impl"] }
+embassy-rp = { version = "0.3", features = ["rp2040", "critical-section-impl", "time-driver"] }
+embassy-executor = { version = "0.7", features = ["arch-cortex-m", "executor-thread"] }
+embassy-usb = "0.4"
+embassy-futures = "0.1"
+embassy-time = "0.4"
+static_cell = "2"
+portable-atomic = { version = "1", features = ["critical-section"] }
+pulse-protocol = { path = "../../crates/pulse-protocol" }
 
 [profile.release]
 debug = 2
