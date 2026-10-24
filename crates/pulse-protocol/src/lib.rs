@@ -13,6 +13,8 @@ pub enum Kind {
     Hello = 1,
     LoopTicks = 2,
     Event = 3,
+    /// Explicitly synthetic fixture: never present as real loop telemetry.
+    DemoTicks = 4,
 }
 
 impl Kind {
@@ -21,6 +23,7 @@ impl Kind {
             1 => Some(Self::Hello),
             2 => Some(Self::LoopTicks),
             3 => Some(Self::Event),
+            4 => Some(Self::DemoTicks),
             _ => None,
         }
     }
@@ -100,6 +103,84 @@ pub fn crc16_ccitt_false(bytes: &[u8]) -> u16 {
     crc
 }
 
+/// Incremental CDC byte-stream decoder. A USB packet is NOT a Pulse frame
+/// boundary: bytes may arrive fragmented, concatenated or after garbage.
+/// 
+/// Accepts no commands, allocates no memory and recovers after CRC errors.
+pub struct StreamDecoder {
+    buffer: [u8; FRAME_LEN],
+    len: usize,
+}
+
+impl Default for StreamDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StreamDecoder {
+    pub const fn new() -> Self {
+        Self {
+            buffer: [0; FRAME_LEN],
+            len: 0,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.len = 0;
+    }
+
+    pub fn push(&mut self, byte: u8) -> Option<Result<Frame, DecodeError>> {
+        if self.len == 0 {
+            if byte == MAGIC[0] {
+                self.buffer[0] = byte;
+                self.len = 1;
+            }
+            return None;
+        }
+
+        if self.len == 1 && byte != MAGIC[1] {
+            if byte != MAGIC[0] {
+                self.len = 0;
+            }
+            return None;
+        }
+
+        self.buffer[self.len] = byte;
+        self.len += 1;
+
+        if self.len != FRAME_LEN {
+            return None;
+        }
+
+        let result = decode(&self.buffer);
+        if result.is_ok() {
+            self.len = 0;
+        } else {
+            // Preserve an embedded RP prefix after a malformed frame so the
+            // next valid frame is not lost. Handles interspersed noise too.
+            let mut found = None;
+            for offset in 1..(FRAME_LEN - 1) {
+                if self.buffer[offset] == MAGIC[0] && self.buffer[offset + 1] == MAGIC[1] {
+                    found = Some(offset);
+                    break;
+                }
+            }
+            if let Some(offset) = found {
+                self.buffer.copy_within(offset..FRAME_LEN, 0);
+                self.len = FRAME_LEN - offset;
+            } else if self.buffer[FRAME_LEN - 1] == MAGIC[0] {
+                self.buffer[0] = MAGIC[0];
+                self.len = 1;
+            } else {
+                self.len = 0;
+            }
+        }
+
+        Some(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,6 +223,69 @@ mod tests {
         let mut raw = raw;
         raw[0] = b'Z';
         assert_eq!(decode(&raw), Err(DecodeError::Magic));
+    }
+
+    #[test]
+    fn streaming_decoder_handles_noise_and_fragmentation() {
+        let expected = example();
+        let bytes = encode(expected);
+        let mut dec = StreamDecoder::new();
+        for byte in [0u8, b'A', b'R', b'R', b'P', 0x7f] {
+            assert!(dec.push(byte).is_none());
+        }
+        let mut received = None;
+        for byte in bytes {
+            if let Some(result) = dec.push(byte) {
+                received = Some(result);
+            }
+        }
+        assert_eq!(received, Some(Ok(expected)));
+    }
+
+    #[test]
+    fn streaming_decoder_survives_bad_crc_and_resynchronizes() {
+        let mut damaged = encode(example());
+        damaged[12] ^= 0x01;
+        let good = Frame {
+            kind: Kind::DemoTicks,
+            sequence: 43,
+            uptime_ms: 1300,
+            value: 123,
+        };
+        let good_bytes = encode(good);
+        let mut dec = StreamDecoder::new();
+        let mut outcomes = [None, None];
+        let mut index = 0;
+        for byte in damaged.into_iter().chain(good_bytes) {
+            if let Some(result) = dec.push(byte) {
+                outcomes[index] = Some(result);
+                index += 1;
+            }
+        }
+        assert_eq!(outcomes[0], Some(Err(DecodeError::Checksum)));
+        assert_eq!(outcomes[1], Some(Ok(good)));
+    }
+
+    #[test]
+    fn streaming_decoder_reassembles_two_packed_frames() {
+        let mut dec = StreamDecoder::new();
+        let first = example();
+        let second = Frame {
+            kind: Kind::DemoTicks,
+            sequence: 1,
+            uptime_ms: 100,
+            value: 5,
+        };
+        let mut outcomes = [None, None];
+        let mut index = 0;
+        for byte in encode(first).into_iter().chain(encode(second)) {
+            if let Some(result) = dec.push(byte) {
+                outcomes[index] = Some(result);
+                index += 1;
+            }
+        }
+        assert_eq!(outcomes[0], Some(Ok(first)));
+        assert_eq!(outcomes[1], Some(Ok(second)));
     }
 
     #[test]
