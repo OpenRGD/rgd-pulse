@@ -1,6 +1,6 @@
-use std::{env, fmt::Write as _, process};
 use pulse_core::Observer;
 use pulse_protocol::{decode, encode, Frame, Kind};
+use std::{env, fmt::Write as _, process};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -38,12 +38,18 @@ fn main() {
         for b in bytes {
             write!(&mut hex, "{b:02X}").unwrap();
         }
-        println!("seq={:03} ticks={:05} link={:?} loop={:?} frame={hex}",
-            frame.sequence, frame.value,
+        println!(
+            "seq={:03} ticks={:05} link={:?} loop={:?} frame={hex}",
+            frame.sequence,
+            frame.value,
             observer.link_state(timestamp as u64),
-            observer.loop_state(timestamp as u64));
+            observer.loop_state(timestamp as u64)
+        );
     }
     let after = (count as u64).saturating_mul(100) + 301;
-    println!("DISCONNECT simulation: link={:?} loop={:?} (time={after}ms)",
-        observer.link_state(after), observer.loop_state(after));
+    println!(
+        "DISCONNECT simulation: link={:?} loop={:?} (time={after}ms)",
+        observer.link_state(after),
+        observer.loop_state(after)
+    );
 }

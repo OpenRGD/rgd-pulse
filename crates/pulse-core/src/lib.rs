@@ -3,13 +3,23 @@
 use pulse_protocol::{Frame, Kind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LinkState { Waiting, Live, Stale }
+pub enum LinkState {
+    Waiting,
+    Live,
+    Stale,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LoopState { Unobserved, Advancing, Stalled }
+pub enum LoopState {
+    Unobserved,
+    Advancing,
+    Stalled,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ObserveError { DuplicateOrOldSequence }
+pub enum ObserveError {
+    DuplicateOrOldSequence,
+}
 
 pub struct Observer {
     timeout_ms: u64,
@@ -79,7 +89,12 @@ impl Observer {
 mod tests {
     use super::*;
     fn tick(sequence: u32, ticks: u32) -> Frame {
-        Frame { kind: Kind::LoopTicks, sequence, uptime_ms: sequence.wrapping_mul(100), value: ticks }
+        Frame {
+            kind: Kind::LoopTicks,
+            sequence,
+            uptime_ms: sequence.wrapping_mul(100),
+            value: ticks,
+        }
     }
 
     #[test]
@@ -111,8 +126,14 @@ mod tests {
         observer.observe(tick(2, 100), 0).unwrap();
         observer.observe(tick(5, 120), 100).unwrap();
         assert_eq!(observer.missed_frames(), 2);
-        assert_eq!(observer.observe(tick(5, 150), 200), Err(ObserveError::DuplicateOrOldSequence));
-        assert_eq!(observer.observe(tick(4, 150), 300), Err(ObserveError::DuplicateOrOldSequence));
+        assert_eq!(
+            observer.observe(tick(5, 150), 200),
+            Err(ObserveError::DuplicateOrOldSequence)
+        );
+        assert_eq!(
+            observer.observe(tick(4, 150), 300),
+            Err(ObserveError::DuplicateOrOldSequence)
+        );
     }
 
     #[test]
