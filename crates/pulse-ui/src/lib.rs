@@ -7,6 +7,7 @@
 
 pub mod input_lab;
 pub mod input_repeat;
+pub mod imu;
 pub mod settings;
 pub mod skins;
 
