@@ -43,7 +43,11 @@ See [firmware/pico-w/README.md](firmware/pico-w/README.md) and [PULSE-0.1C USB b
 * Synthesized telemetry is never represented as measured loop performance.
 * The Pico is informational only; no motor control, calibration writing, actuator flashing or safety override.
 
-## USB CDC prototype (candidate)\n\n```sh\n# Explicit port path, verified by udevadm. Never guess ttyACM0 on Paky-01.\ncargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/YOUR_PICO_PATH 20\n```\n\nOnly frames marked `DemoTicks` are transmitted, never real motor commands.\n\n## Planned waves
+## USB CDC prototype (candidate)\n\n```sh\n# Explicit port path, verified by udevadm. Never guess ttyACM0 on Paky-01.\ncargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/YOUR_PICO_PATH 20\n```\n\nOnly frames marked `DemoTicks` are transmitted, never real motor commands.\n\n## Chronoscope UI candidate (design only)
+
+The four-screen hardware HMI proposal (K1 SOMATIC / K2 CHRONONS / K3 IMU / K4 SYSTEM), joystick gestures, compact charts and data provenance policy are specified in [PULSE-0.2A UI SPEC](docs/CHRONOSCOPE-0.2A-UI-SPEC.md). This is **not implemented**, does not change canonical contracts and does not turn synthetic telemetry into real measurements.
+
+## Planned waves
 
 PULSE-0.1A protocol + synthetic host; PULSE-0.1B LCD/buttons hardware bring-up; PULSE-0.1C USB CDC bridge; PULSE-0.2 Chronoscope timeline. Contract promotion and canonical registration need separate review and PRs.
 
