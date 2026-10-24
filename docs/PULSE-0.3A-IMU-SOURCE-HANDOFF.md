@@ -1,6 +1,6 @@
 # PULSE-0.3A — IMU real-data model and Console handoff
 
-**Status:** Phase A SOURCE MODEL + CONTRACT HANDOFF ONLY. This branch adds a tested `no_std` fixed-size IMU observation model in `crates/pulse-ui/src/imu.rs`. It does **not** connect the live Console feed to USB, alter the flashed Pico firmware, modify the WIT reader, or display actual IMU values yet.
+**Status:** Phase A SOURCE MODEL + OFFLINE JSON SHAPE VALIDATION + CONTRACT HANDOFF ONLY. This branch adds a tested `no_std` IMU model and a host-side `pulse-bridge imu-preview` JSON validator. It does **not** connect the live Console feed to USB, alter flashed Pico firmware, modify the WIT reader, or display actual IMU values yet.
 
 ## Actual Paky-01 producer reviewed
 
@@ -47,15 +47,32 @@ This stage deliberately **does not repurpose `PULSE/1 Kind::DemoTicks`** as real
 | Gyro | `gyro_mrad_s: [i32; 3]`, quantized from publisher rad/s |
 | Acceleration | `accel_mm_s2: [i32; 3]`, quantized from publisher m/s² |
 | Temperature | `temp_cdeg: Option<i16>`; no invented values when not available |
-| Origin | `ConsoleReadOnlyObservation` or `SyntheticFixture` distinct at type level. The bridge is responsible for checking source/robot/session/auth provenance before assigning the real origin |
+| Origin | `ConsoleReadOnlyObservation`, `ImportedJsonUnverified`, or `SyntheticFixture` distinct at type level. Importing matching JSON does **not** authenticate it. A live host subscriber must check source/robot/session/auth before assigning the real origin |
 | Frame | `SensorAxesUnverified` (no sensor-to-torso calibration or absolute yaw) |
 | Freshness | `host_age_at_forward_ms: Option<u32>` supplied from host-monotonic age at forward time; on Pico it is summed with elapsed **Pico receive-relative time**. No comparison of two unrelated clocks |
-| Valid status | NoSource / Synthetic / AgeUnknown / FreshSensorAxes / Stale |
+| Valid status | NoSource / Synthetic / UntrustedImport / AgeUnknown / FreshSensorAxes / Stale |
 | Stale gate | 800 ms **UI threshold**, not a control deadline or IMU calibration assertion |
 | Replay protection | Duplicate/descending sequence rejected within same source session; new session ID permits sequence reset |
 | Missing/invalid | Reject out-of-range angles and sequence 0; an absent host age can never be called fresh |
 
-No heap, no sensor serial opens, no USB transmission, no actuation. Unit tests cover all these invariants.
+No heap, no sensor serial opens, no USB transmission, no actuation in the shared MCU model. The host-only JSON preview allocates bounded memory to parse a local file and is tested independently.
+
+## Added host-only sample validator (no device access)
+
+`crates/pulse-bridge/src/imu_import.rs` uses the exact known candidate producer schema. It checks all five source/identity constants, full 16-byte session UUID, nonzero sequence/host receipt timestamp, `calibration_revision: null`, three-element arrays, finite and bounded values, quantization and explicit **offline unverified provenance**.
+
+For one **redacted observation JSON file** exported by the IMU/Console chat:
+
+```bash
+cd ~/openrgd/rgd-pulse
+git fetch origin
+git switch feat/pulse-0.3a-imu-observation-model
+git pull --ff-only
+cargo test --workspace
+cargo run -p pulse-bridge -- imu-preview /path/to/redacted-imu-sample.json
+```
+
+Output prints sensor-axis Euler angles, quantized gyro/accel and `age=UNKNOWN / UNVERIFIED / NO_USB / NO_MOTION`. This is **not** a live subscription, does not query Console's POST endpoint, does not open either USB serial port, and does not transmit or claim robot/world attitude. A local file may contain legitimate sensor-origin bytes, but the parser cannot authenticate its provenance, so the Rust `Origin::ImportedJsonUnverified` state must never become `FreshSensorAxes` on Pico.
 
 ## Must clarify with the already-running IMU/Console implementation
 
