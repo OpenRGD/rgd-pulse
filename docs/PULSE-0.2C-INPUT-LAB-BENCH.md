@@ -1,6 +1,28 @@
 # PULSE-0.2C — Physical joystick and K1–K4 INPUT LAB
 
-**Status:** no-std Input Lab firmware candidate; **physical test pending**. No robot actuation, CAN access, IMU serial access or real Somatic telemetry.
+**Status:** first physical input discovery **operator-reported on 2026-10-24**; remapped firmware candidate **not yet re-flashed or accepted**. No robot actuation, CAN access, IMU serial access or real Somatic telemetry.
+
+## Operator-reported input evidence — 2026-10-24
+
+With the board held **joystick LEFT / K1..K4 RIGHT**, Input Lab displayed the following GPIO numbers when the operator physically moved the joystick:
+
+| Physical gesture | Observed GPIO | Raw array index | Corrected software action |
+|---|---|---|---|
+| SU / UP | **GP18** | 7 | `Action::Up` |
+| GIÙ / DOWN | **GP20** | 5 | `Action::Down` |
+| SINISTRA / LEFT | **GP16** | 4 | `Action::Left` |
+| DESTRA / RIGHT | **GP19** | 8 | `Action::Right` |
+| CENTRO / CLICK | **GP17** | 6 | `Action::Click` |
+
+K1, K2, K3, K4 were reported **all correct**; raw GPIO sampling remains GP8, GP4, GP3, GP2 respectively.
+
+**Important discrepancy:** the operator reports the physical **UP** gesture as GP18 and **CENTER CLICK** as GP17, unlike the vendor-derived 0.2B hypothesis where GP18 was center and GP17 another directional pin. We preserve the first real observations for a software-only remapping, but do not treat them as independently certified pinout; recheck GP18 and GP17 **twice each**, with full release between presses, after flashing the candidate.
+
+Source of truth distinction:
+- The GPIO reported by the device is a **physical input observation**.
+- The software action (`UP`, `CLICK`, etc.) is **our interpretation**, configurable and testable.
+- Firmware reflash/USB ACK/normal graphical navigation post-remap remain unverified until the next operator run.
+- This module has no motion commands; the physical controls remain local diagnostic UI only.
 
 ## Why a dedicated screen?
 
@@ -22,7 +44,7 @@ Hold the same **K1 + K4** pair for at least 1.2 seconds to exit to the normal fo
 | MOVE JOYSTICK / KEYS  |
 |                       |
 | RAW PIN  | FW MAP     |
-| GP16     | UP         |
+| GP18     | UP         |
 | HELD     | CHECK DIR  |
 |                       |
 | PRESSES: 2            |
@@ -41,13 +63,13 @@ Hold the same **K1 + K4** pair for at least 1.2 seconds to exit to the normal fo
 
 Push each direction **once**, release fully, and look at the left **RAW PIN** and right **FW MAP** fields. The first column is *what you actually did with your hand*; the GPIO is what the firmware reports and should be written down even if unexpected.
 
-| You physically push | Current expected RAW PIN (candidate) | Current FW MAP |
+| You physically push | Observed RAW PIN (operator) | Corrected FW MAP candidate |
 |---|---|---|
-| UP / SU | GP16 | UP |
-| DOWN / GIÙ | GP17 | DOWN |
-| LEFT / SINISTRA | GP20 | LEFT |
-| RIGHT / DESTRA | GP19 | RIGHT |
-| CENTER CLICK | GP18 | CLICK |
+| UP / SU | **GP18** | UP |
+| DOWN / GIÙ | **GP20** | DOWN |
+| LEFT / SINISTRA | **GP16** | LEFT |
+| RIGHT / DESTRA | **GP19** | RIGHT |
+| CENTER CLICK | **GP17** | CLICK |
 
 Test K1, K2, K3 and K4 separately as well:
 
@@ -58,7 +80,7 @@ Test K1, K2, K3 and K4 separately as well:
 | K3 | GP3 | K3/IMU |
 | K4 | GP2 | K4/SYS |
 
-**Important:** the expected GPIO table is taken from current vendor pinout plus the **unverified** 90° physical orientation model, not from a fresh measurement of this assembled unit. If a physical UP shows `GP20 / LEFT`, report **exactly that**. We can then change only `landscape_action` and leave the raw pin driver untouched.
+**Important:** the new table derives from the operator's physical Input Lab results, not the earlier vendor-oriented guess. In the *new* firmware, the `FW MAP` column must show the same gesture as the physical movement, especially `UP / GP18` and `CLICK / GP17`. Recheck them because they differ from the published board direction labels. Only `landscape_action` changes; `raw_gpio`, the GPIO driver, display orientation and USB CDC protocol are unchanged.
 
 ### Simple operator report
 
@@ -112,7 +134,8 @@ Once the GPIO tests are complete, locate the actual Pulse USB CDC device by `lsu
 
 - [ ] K1+K4 chord reliably enters and exits INPUT LAB after a 1.2s hold.
 - [ ] RAW PIN remains visible after each joystick release and matches reported GPIO.
-- [ ] Five physical joystick directions independently reported, with no assumed axis swap.
-- [ ] Four physical K keys independently reported, with no remap conflicts.
-- [ ] UI and USB remain operational after exiting diagnostics.
-- [ ] Only after physical evidence, update logical GPIO→UP/DOWN/LEFT/RIGHT mapping and its tests.
+- [x] Five physical joystick gestures reported with distinct raw GPIOs (operator observation); GP18=UP, GP20=DOWN, GP16=LEFT, GP19=RIGHT, GP17=CLICK.
+- [x] Four physical K keys reported correct by the operator; independent GPIO-by-GPIO follow-up optional.
+- [x] Candidate logical mapping and Rust unit tests updated from operator observations.
+- [ ] Firmware reflashed, Input Lab re-tested (UP GP18 and CLICK GP17 twice each).
+- [ ] Normal graphical navigation, K1..K4, joystick zoom and USB ACK run still operational after exiting diagnostics.
