@@ -16,7 +16,12 @@ const LCD_H: u16 = 128;
 // on the physical joystick-left / keys-right unit.
 const X_OFFSET: u16 = 2;
 const Y_OFFSET: u16 = 3;
-const MADCTL_LANDSCAPE_CANDIDATE: u8 = 0xA0; // MY|MV: -90deg gfx compensation
+// Operator 2026-10-24: 0xA0 (MY|MV) produced an upside-down UI while
+// joystick was at left and K1–K4 at right. The opposite landscape
+// orientation 0x60 (MX|MV) flips the displayed image by 180 degrees,
+// without changing the page controls or the framebuffer coordinates.
+// Verify on the physical ST7735S; X/Y RAM offsets remain provisional.
+const MADCTL_LANDSCAPE_CANDIDATE: u8 = 0x60; // MX | MV
 
 pub struct Lcd<'a> {
     spi: Spi<'a, SPI0, Blocking>,
