@@ -27,6 +27,14 @@ fn spin(count: u32) {
     cortex_m::asm::delay(count);
 }
 
+// Embassy's default RP2040 sysclock is around 125 MHz. The Cortex-M busy loop
+// is deliberately conservative for the first hardware diagnostic. Replace it
+// with a monotonic hardware-timer delay once LCD bring-up is verified.
+// ST7735S requires >=120 ms after SLPOUT, unlike the previous ~32 ms hold.
+const LCD_RESET_SETTLE: u32 = 25_000_000;
+const LCD_SLEEP_EXIT_SETTLE: u32 = 25_000_000;
+const BOOT_BLINK_HOLD: u32 = 25_000_000;
+
 struct Lcd<'a> {
     sck: Output<'a>, mosi: Output<'a>, cs: Output<'a>,
     dc: Output<'a>, reset: Output<'a>, bl: Output<'a>,
@@ -64,15 +72,15 @@ impl<'a> Lcd<'a> {
         self.cs.set_high();
         self.sck.set_low();
         self.reset.set_high();
-        spin(1_000_000);
-        self.reset.set_low();
-        spin(1_000_000);
-        self.reset.set_high();
         spin(2_000_000);
+        self.reset.set_low();
+        spin(2_000_000);
+        self.reset.set_high();
+        spin(LCD_RESET_SETTLE);
         self.cmd(0x01); // SWRESET
-        spin(4_000_000);
+        spin(LCD_RESET_SETTLE);
         self.cmd(0x11); // SLPOUT
-        spin(4_000_000);
+        spin(LCD_SLEEP_EXIT_SETTLE);
         self.cmd(0x3A); self.data(&[0x05]); // COLMOD RGB565
         self.cmd(0x36); self.data(&[0x00]); // MADCTL initial orientation
         self.cmd(0x21); // inversion ON (common ST7735S module)
@@ -128,6 +136,17 @@ fn main() -> ! {
         Input::new(p.PIN_17, Pull::Up), Input::new(p.PIN_18, Pull::Up),
         Input::new(p.PIN_19, Pull::Up),
     ];
+
+    // First independent boot diagnostic: three visible backlight pulses.
+    // This does not require working SPI or ST7735S initialization.
+    // If no pulses can be seen, check that this firmware actually boots and
+    // that GP13 can drive BL before investigating the LCD graphics.
+    for _ in 0..3 {
+        lcd.bl.set_high();
+        spin(BOOT_BLINK_HOLD);
+        lcd.bl.set_low();
+        spin(BOOT_BLINK_HOLD);
+    }
 
     lcd.init();
     lcd.rect(0, 0, 128, 128, BLACK);
