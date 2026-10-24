@@ -6,5 +6,6 @@ license = "MIT"
 description = "Synthetic host bridge demo for OpenRGD Pulse"
 
 [dependencies]
+serialport = { version = "4.8", default-features = false }
 pulse-core = { path = "../pulse-core" }
 pulse-protocol = { path = "../pulse-protocol" }
