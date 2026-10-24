@@ -6,6 +6,9 @@
 //! All controls are local. No joystick or K-key represents a motion command.
 
 pub mod input_lab;
+pub mod input_repeat;
+pub mod settings;
+pub mod skins;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
@@ -27,6 +30,17 @@ impl Page {
             Self::Chronons => "CHRONONS",
             Self::Imu => "IMU",
             Self::System => "SYSTEM",
+        }
+    }
+
+    /// Physical K identity: a page button is K1..K4, never a rolling count.
+    /// Independent from the diagnostic input-event counter.
+    pub const fn physical_key_label(self) -> &'static str {
+        match self {
+            Self::Somatic => "K1",
+            Self::Chronons => "K2",
+            Self::Imu => "K3",
+            Self::System => "K4",
         }
     }
 }
@@ -87,6 +101,10 @@ pub struct UiState {
     pub pan: u8,
     /// Detail scroll line for event/system inspection.
     pub detail_line: u8,
+    /// Recent local UI event, for one-character header feedback.
+    pub last_action: Option<Action>,
+    /// Advances even at selection boundaries: physical input remains visible.
+    pub input_count: u16,
 }
 
 impl Default for UiState {
@@ -105,6 +123,8 @@ impl UiState {
             zoom: 0,
             pan: 0,
             detail_line: 0,
+            last_action: None,
+            input_count: 0,
         }
     }
 
@@ -134,15 +154,19 @@ impl UiState {
 
     /// Returns true if the screen state changed.
     pub fn handle(&mut self, action: Action) -> bool {
+        // Show a tiny key indicator and rotating count on *every* real
+        // joystick action, even when selection/zoom is already at a limit.
+        // This is UI feedback only; never infer Somatic or motor activity.
+        self.last_action = Some(action);
+        self.input_count = self.input_count.wrapping_add(1);
         if let Action::Page(page) = action {
-            let changed = self.page != page || self.mode != Mode::Browse;
             self.page = page;
             self.mode = Mode::Browse;
             self.zoom = 0;
             self.pan = 0;
             self.detail_line = 0;
             // Selecting an already-open page closes details too.
-            return changed;
+            return true;
         }
 
         if action == Action::Click {
@@ -221,6 +245,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn page_feedback_uses_physical_key_not_press_counter() {
+        for (page, label) in [
+            (Page::Somatic, "K1"),
+            (Page::Chronons, "K2"),
+            (Page::Imu, "K3"),
+            (Page::System, "K4"),
+        ] {
+            assert_eq!(page.physical_key_label(), label);
+            let mut ui = UiState::new();
+            for _ in 0..20 {
+                ui.handle(Action::Page(page));
+                assert_eq!(ui.page.physical_key_label(), label);
+            }
+        }
+    }
+
+    #[test]
     fn buttons_directly_select_all_four_pages() {
         let mut ui = UiState::new();
         for (raw, page) in [
@@ -278,6 +319,18 @@ mod tests {
         assert_eq!(landscape_action(raw_for_gp18 as usize), Some(Action::Up));
         ui.handle(landscape_action(raw_for_gp18 as usize).unwrap());
         assert_eq!(ui.selected(), 0);
+    }
+
+    #[test]
+    fn input_feedback_advances_even_at_selection_bounds() {
+        let mut ui = UiState::new();
+        assert_eq!(ui.selected(), 0);
+        assert!(ui.handle(Action::Up)); // first selection already bounded at 0
+        assert_eq!(ui.selected(), 0);
+        assert_eq!(ui.last_action, Some(Action::Up));
+        assert_eq!(ui.input_count, 1);
+        assert!(ui.handle(Action::Page(Page::Somatic)));
+        assert_eq!(ui.input_count, 2);
     }
 
     #[test]

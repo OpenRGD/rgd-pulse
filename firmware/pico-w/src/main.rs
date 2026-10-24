@@ -26,7 +26,14 @@ use embassy_usb::{
 use lcd::Lcd;
 use panic_halt as _;
 use pulse_protocol::{encode, Frame, Kind, StreamDecoder};
-use pulse_ui::{input_lab::InputLab, landscape_action, UiState};
+use pulse_ui::{
+    input_lab::InputLab,
+    input_repeat::InputRepeater,
+    landscape_action,
+    settings::Settings,
+    skins::SkinId,
+    UiState,
+};
 use render::{Frame as Framebuffer, RenderData, UsbState, PIXELS};
 use static_cell::StaticCell;
 
@@ -108,7 +115,10 @@ async fn main(spawner: Spawner) {
 
     static FRAME: StaticCell<[u16; PIXELS]> = StaticCell::new();
     let backing = FRAME.init_with(|| [0u16; PIXELS]);
-    let mut image = Framebuffer { data: backing };
+    let mut image = Framebuffer {
+        data: backing,
+        skin: SkinId::Classic,
+    };
 
     // Give the USB executor a turn before beginning non-critical LCD work.
     Timer::after_millis(10).await;
@@ -118,7 +128,9 @@ async fn main(spawner: Spawner) {
     Timer::after_millis(350).await;
 
     let mut ui = UiState::new(); // K1 SOMATIC default
-    let mut input_lab = InputLab::new(); // Hold K1+K4 >=1.2s to toggle raw GPIO diagnostics
+    let mut input_lab = InputLab::new(); // K1+K4 >=1.2s: raw GPIO diagnostics
+    let mut settings = Settings::new(); // K2+K3 >=1.2s: Winamp-style skin picker
+    let mut repeater = InputRepeater::new(); // Direction keys only, never CLICK/K1-K4
     let mut decoder = StreamDecoder::new();
     let mut rx_packet = [0u8; 64];
     let mut usb_connected = false;
@@ -236,41 +248,84 @@ async fn main(spawner: Spawner) {
             needs_draw = true;
         }
 
-        // Sample all nine raw GPIO inputs. Do not infer the physical axis
-        // from navigation output: INPUT LAB shows pin identity vs software map
-        // side by side. Hold K1+K4 for 1200ms to enter/leave the lab.
+        // Sample the physical GPIOs without altering their proven mapping.
+        // K1+K4 hold opens Input Lab. K2+K3 hold opens skin settings.
+        // These are disjoint, mutually exclusive local UI overlays.
         let mut mask = 0u16;
         for (index, key) in keys.iter().enumerate() {
             if key.is_low() {
                 mask |= 1 << index;
             }
         }
-        let previously_in_lab = input_lab.active;
-        needs_draw |= input_lab.observe(mask, now_ms);
+        let was_in_lab = input_lab.active;
+        let was_in_settings = settings.open;
 
-        // Edge-triggered UI gestures retain the proven original semantics.
-        // While INPUT LAB is active (or a toggle chord is held), no normal
-        // screen navigation happens; raw joystick sampling still continues.
+        if !settings.open {
+            needs_draw |= input_lab.observe(mask, now_ms);
+        } else {
+            // Prevent the Input Lab chord from arming inside Settings.
+            needs_draw |= input_lab.observe(0, now_ms);
+        }
+        if !input_lab.active {
+            needs_draw |= settings.observe(mask, now_ms, true);
+        } else {
+            needs_draw |= settings.observe(0, now_ms, false);
+        }
+
+        let overlay_switched =
+            was_in_lab != input_lab.active || was_in_settings != settings.open;
+        if overlay_switched {
+            repeater.reset(); // Never carry a held direction across overlays.
+            needs_draw = true;
+        }
+
+        // Physical UP/DOWN/LEFT/RIGHT can auto-repeat after an initial
+        // 440ms hold: 240 -> 155 -> 100ms progression as hold duration grows.
+        // K page switches and the center click remain single, edge-only.
+        // The old 140ms debouncer still applies to fresh press edges.
         let pressed = mask & !previous_mask;
-        if !input_lab.active && !previously_in_lab && !input_lab.chord_held() {
+        let repeated = if input_lab.active {
+            repeater.reset();
+            0u16
+        } else {
+            repeater.poll(mask, now_ms)
+        };
+
+        let chord_blocked = input_lab.chord_held() || settings.chord_held(mask);
+        if !input_lab.active && !was_in_lab && !overlay_switched && !chord_blocked {
+            let events = pressed | repeated;
             for index in 0..9 {
-                if (pressed & (1 << index)) != 0
-                    && (last_key_ms[index] == 0
-                        || now_ms.saturating_sub(last_key_ms[index]) >= BUTTON_DEBOUNCE_MS)
-                {
-                    last_key_ms[index] = now_ms.max(1);
-                    if let Some(action) = landscape_action(index) {
-                        needs_draw |= ui.handle(action);
+                if (events & (1 << index)) != 0 {
+                    let auto_repeat = repeated & (1 << index) != 0;
+                    let debounce_ok = auto_repeat
+                        || last_key_ms[index] == 0
+                        || now_ms.saturating_sub(last_key_ms[index]) >= BUTTON_DEBOUNCE_MS;
+                    if debounce_ok {
+                        last_key_ms[index] = now_ms.max(1);
+                        if let Some(action) = landscape_action(index) {
+                            if settings.open {
+                                needs_draw |= settings.handle(action);
+                            } else {
+                                needs_draw |= ui.handle(action);
+                            }
+                        }
                     }
                 }
             }
         }
+
         previous_mask = mask;
 
         if needs_draw {
             if input_lab.active {
+                // Diagnostic pin labels have a stable, legible classic palette.
+                image.skin = SkinId::Classic;
                 render::render_input_lab(&mut image, &input_lab);
+            } else if settings.open {
+                image.skin = settings.visual_skin();
+                render::render_skin_settings(&mut image, &settings);
             } else {
+                image.skin = settings.applied;
                 let info = RenderData {
                     usb: new_usb_state,
                     demo_sequence: last_demo_sequence.unwrap_or(0),
