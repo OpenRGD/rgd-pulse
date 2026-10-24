@@ -129,6 +129,26 @@ This provides evidence of valid bidirectional CDC transport, 100 matching CRC-ch
 
 Remaining physical gate: unplug/replug and re-enumeration with another successful ACK run. Other refinements: inspect RGB/BGR/color mapping, display pixel offsets and verify stale/disconnected visual state.
 
+## Operator-reported physical USB unplug/replug — 2026-10-24 (partial)
+
+Operator physically disconnected and reconnected the Pico W USB cable after the successful 100/100 synthetic ACK benchmark. The **first** post-replug observation showed:
+
+```text
+lsusb -d c0de:cafe           # no output
+ls -l /dev/serial/by-id/     # only CH340 usb-1a86_USB_Serial-if00-port0 -> ttyUSB0
+```
+
+A **later** invocation of `pulse-bridge serial-demo ... 20` produced:
+
+```text
+PULSE ACK SUMMARY: 20/20 confirmed, 0 unexpected frames
+PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.
+```
+
+This proves the synthetic round-trip resumed **at some point after the cable test**, but does **not** prove prompt, repeatable USB re-enumeration. The interval between these observations and whether any additional operator action occurred were not recorded. Leave the plug/replug acceptance gate open until a timed enumeration test also captures `cdc_acm` and by-id/by-path creation, followed by the 20/20 run with no intervention.
+
+Previous mini-PC kernel log included `usb 1-1-port4: disabled by hub (EMI?), re-enabling...`. This is a Linux diagnostic hint, **not** proof that electromagnetic interference caused the current observation. A powered USB data hub and cable quality may merit controlled inspection. Do not alter robot CAN, actuator wiring, 12/24 V supply or use the CH340 ttyUSB0 for Pulse testing.
+
 ## Upgrade to USB CDC
 
 On the Ubuntu mini-PC, use the existing `feat/pulse-0.1c-usb-cdc` branch (stacked on `feat/pulse-0.1a-foundation`):
@@ -216,7 +236,7 @@ If the port fails with permission denied, check `groups` and `ls -l` on the port
 - [ ] Device visually detects stale stream or closed connection.
 - [x] Operator reports input responsiveness during active 100-frame CDC traffic; individual 9/9 under load can be repeated in the final hardware regression.
 - [x] Three repeated USB serial open/close cycles without power-cycle: 3/3 HELLO, 60/60 matching ACK, 0 unexpected frames.
-- [ ] Physical USB unplug/replug re-enumeration and subsequent session verified.
+- [ ] Timed, repeatable USB unplug/replug re-enumeration without other interventions. One post-replug snapshot lacked c0de:cafe, while a later 20/20 ACK run succeeded; elapsed time unknown.
 - [ ] No power, motor, CAN, actuation or calibration operation triggered.
 
 ## Protocol boundaries
