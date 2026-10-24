@@ -5,6 +5,8 @@
 //! Non-actuating state machine, independent from hardware, USB and rendering.
 //! All controls are local. No joystick or K-key represents a motion command.
 
+pub mod input_lab;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum Page {
