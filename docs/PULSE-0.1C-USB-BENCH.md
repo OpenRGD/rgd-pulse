@@ -149,6 +149,24 @@ This proves the synthetic round-trip resumed **at some point after the cable tes
 
 Previous mini-PC kernel log included `usb 1-1-port4: disabled by hub (EMI?), re-enabling...`. This is a Linux diagnostic hint, **not** proof that electromagnetic interference caused the current observation. A powered USB data hub and cable quality may merit controlled inspection. Do not alter robot CAN, actuator wiring, 12/24 V supply or use the CH340 ttyUSB0 for Pulse testing.
 
+### Kernel confirmation of the physical reconnect (2026-10-24)
+
+A subsequent operator-supplied `dmesg` excerpt confirms the exact **new USB device 41** and that Linux registered the CDC ACM port:
+
+```text
+[89615.917003] usb 1-1.4: USB disconnect, device number 40
+[89626.097748] usb 1-1.4: new full-speed USB device number 41 using xhci_hcd
+[89631.440967] usb 1-1.4: New USB device found, idVendor=c0de, idProduct=cafe
+[89631.440990] usb 1-1.4: Product: RGD Pulse Pico W prototype
+[89631.452981] cdc_acm 1-1.4:1.0: ttyACM0: USB ACM device
+```
+
+The subsequent `lsusb -d c0de:cafe` showed `Bus 001 Device 041`; `/dev/serial/by-id/usb-OpenRGD_RGD_Pulse_Pico_W_prototype-if00` pointed to `ttyACM0`. **Physical re-enumeration is therefore confirmed.**
+
+From the kernel event timestamps, the interval between **first new-device detection** and `cdc_acm` registration is **5.355 seconds** (89631.452981 - 89626.097748). The ~10.181 seconds between disconnection and first detection include the unknown unplugged interval, so they are **not** a firmware boot-time measurement. Recovery time is not yet benchmarked over repeated cycles.
+
+**Relevant implementation hypothesis:** the present `firmware/pico-w/src/main.rs` performs three blocking backlight pulses, LCD initialization and full-screen bit-banged SPI draws *before* constructing and spawning the USB stack. This could materially delay USB enumeration during early startup. It is not yet experimentally demonstrated as the sole source of the measured gap. Candidate PULSE-0.1C.2: start USB first, make display initialization/update bounded and cooperative (later hardware SPI); measure detection-to-ACM across 5+ boots. The earlier `disabled by hub (EMI?)` log is from a distinct event, not the confirmed device 41 reconnect.
+
 ## Upgrade to USB CDC
 
 On the Ubuntu mini-PC, use the existing `feat/pulse-0.1c-usb-cdc` branch (stacked on `feat/pulse-0.1a-foundation`):
@@ -236,7 +254,8 @@ If the port fails with permission denied, check `groups` and `ls -l` on the port
 - [ ] Device visually detects stale stream or closed connection.
 - [x] Operator reports input responsiveness during active 100-frame CDC traffic; individual 9/9 under load can be repeated in the final hardware regression.
 - [x] Three repeated USB serial open/close cycles without power-cycle: 3/3 HELLO, 60/60 matching ACK, 0 unexpected frames.
-- [ ] Timed, repeatable USB unplug/replug re-enumeration without other interventions. One post-replug snapshot lacked c0de:cafe, while a later 20/20 ACK run succeeded; elapsed time unknown.
+- [x] One physical unplug/replug USB re-enumeration confirmed in kernel (`device 40` disconnected, `device 41` recognized as `c0de:cafe`, `cdc_acm` registered) and later 20/20 synthetic ACK recovery.
+- [ ] Repeated timed reconnect benchmark, including ~5.355 s from new-device detection to CDC registration on the observed reboot.
 - [ ] No power, motor, CAN, actuation or calibration operation triggered.
 
 ## Protocol boundaries
