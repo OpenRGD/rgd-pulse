@@ -29,9 +29,30 @@ The operator subsequently invoked `pulse-bridge serial-demo` on the enumerated P
 
 The LCD still showed its 9 diagnostic indicators and side stripes (reported blue/yellow). This is consistent with the bench UI retaining the button grid; color fidelity/physical orientation are not yet characterized. **The original TX-only bridge did not verify Pico-side receipt** and must not be treated as proof of 100 received frames.
 
-This revision introduces `DemoAck` receipts on accepted CRC-valid, fresh DemoTicks, plus a visible progress bar after every ten accepted frames. Physical ACK confirmation remains pending.
+This revision introduces `DemoAck` receipts on accepted CRC-valid, fresh DemoTicks, plus a visible progress bar after every ten accepted frames.
 
-**Not yet verified:** 100 Pico-side `DemoAck` replies, UI color fidelity, input responsiveness while CDC is active, and unplug/replug recovery. Do not mark PULSE-0.1C end-to-end complete until these checks pass.
+## Operator-reported ACK round-trip — 2026-10-24
+
+On the actual Paky-01 mini-PC and physically connected Pico W, the operator executed `pulse-bridge serial-demo` with an explicit /dev/serial/by-path/ USB CDC alias and count 20. Observed host log:
+
+```text
+Pico HELLO OK (protocol=1, board_id=1)
+Sending 20 explicit DEMO frames, at up to 10Hz
+Expecting one CRC-checked RX DemoAck for every accepted DEMO frame.
+TX DEMO seq=1 synthetic_ticks=100
+RX ACK seq=1 validated_ticks=100
+...
+TX DEMO seq=20 synthetic_ticks=2000
+RX ACK seq=20 validated_ticks=2000
+PULSE ACK SUMMARY: 20/20 confirmed, 0 unexpected frames
+PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.
+```
+
+**Conclusion:** 20/20 command frames yielded matching sequence/value ACK frames validated by host CRC decoder. This is evidence of actual bidirectional **synthetic** round-trip; it is not a Somatic loop measurement, real-time performance certification or test of all reconnect scenarios.
+
+**Observed condition:** one power-cycle of Pico hardware was needed before the successful run. The cause is **unknown** (possible CDC DTR/session-lifetime handling or a startup timing issue). Do not normalize this as expected production operation.
+
+**Remaining acceptance:** consecutive serial-demo invocations without power-cycle, repeated DTR close/open, USB unplug/replug recovery, 100/100 or longer-frame run, screen progress/stale color and 9 input responsiveness while USB active. Panel RGB/BGR mapping is still unverified.
 
 ## Upgrade to USB CDC
 
@@ -114,7 +135,9 @@ If the port fails with permission denied, check `groups` and `ls -l` on the port
 
 - [x] USB CDC appears as a **new identified** device, not an actuator controller (operator-reported VID:PID c0de:cafe).
 - [x] Correct `Hello` handshake before transmitting any fixture (operator-reported).
-- [ ] Pico `DemoAck` confirms each fresh CRC-valid synthetic frame (expect 100/100, or identify losses).\n- [ ] Demo receive progress bar advances in ten-frame steps and completes at 100.\n- [ ] Green demo bar while receiving valid synthetic frames (RGB/BGR verification pending).
+- [x] Pico `DemoAck` confirms 20/20 fresh CRC-valid DEMO frames, matching sequence/value; 100/100 not yet tested.
+- [ ] Demo receive progress bar advances in ten-frame steps and completes at 100.
+- [ ] Green demo bar while receiving valid synthetic frames (RGB/BGR verification pending).
 - [ ] Device visually detects stale stream or closed connection.
 - [ ] Nine buttons and LCD activity remain functional during USB.
 - [ ] Unplug/replug and repeated USB serial open/close are stable.
