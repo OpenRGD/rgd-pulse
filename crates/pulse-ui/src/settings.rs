@@ -20,7 +20,9 @@ pub struct Settings {
 }
 
 impl Default for Settings {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Settings {
@@ -47,7 +49,10 @@ impl Settings {
             return false;
         }
         match self.chord_since_ms {
-            None => { self.chord_since_ms = Some(now_ms); false }
+            None => {
+                self.chord_since_ms = Some(now_ms);
+                false
+            }
             Some(start) if !self.consumed && now_ms.saturating_sub(start) >= SETTINGS_HOLD_MS => {
                 self.consumed = true;
                 if self.open {
@@ -64,7 +69,11 @@ impl Settings {
 
     /// Skin used by the renderer, including instant previews in settings.
     pub const fn visual_skin(&self) -> SkinId {
-        if self.open { self.preview } else { self.applied }
+        if self.open {
+            self.preview
+        } else {
+            self.applied
+        }
     }
 
     pub fn cancel(&mut self) {
@@ -74,7 +83,9 @@ impl Settings {
 
     /// Local menu actions; never interpreted as a robot command.
     pub fn handle(&mut self, action: Action) -> bool {
-        if !self.open { return false; }
+        if !self.open {
+            return false;
+        }
         match action {
             Action::Left | Action::Up => self.preview = self.preview.previous(),
             Action::Right | Action::Down => self.preview = self.preview.next(),
@@ -93,7 +104,7 @@ mod tests {
     use super::*;
     use crate::Page;
 
-    fn open(x: &mut Settings, t:u64) {
+    fn open(x: &mut Settings, t: u64) {
         assert!(!x.observe(SETTINGS_CHORD, t, true));
         assert!(x.observe(SETTINGS_CHORD, t + SETTINGS_HOLD_MS, true));
         assert!(x.open);
@@ -151,7 +162,7 @@ mod tests {
 
     #[test]
     fn k_page_press_does_not_change_the_skin() {
-        let mut s=Settings::new();
+        let mut s = Settings::new();
         open(&mut s, 0);
         assert!(!s.handle(Action::Page(Page::Somatic)));
         assert_eq!(s.preview, SkinId::Classic);
@@ -159,7 +170,7 @@ mod tests {
 
     #[test]
     fn three_or_four_page_keys_never_trigger_chord() {
-        let mut s=Settings::new();
+        let mut s = Settings::new();
         assert!(!s.observe(0b1110, 0, true));
         assert!(!s.observe(0b1110, 2000, true));
         assert!(!s.open);
