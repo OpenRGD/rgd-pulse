@@ -96,6 +96,23 @@ done
 
 Each run must show `Pico HELLO OK`, `20/20 confirmed`, `0 unexpected frames`. Verify a later count-100 run and USB unplug/replug independently, then check buttons/joystick under active traffic. Capture any failure **before** power-cycling.
 
+## Operator-reported DTR recovery pass — 2026-10-24
+
+After flashing the DTR-aware Pico firmware and updating the Rust host bridge, the operator ran **three consecutive** `pulse-bridge serial-demo <verified-pico-by-path> 20` sessions **without physical USB reconnection, firmware reflashing or power-cycle**.
+
+| Session | New HELLO | CRC-checked matching DemoAck | Unexpected frames |
+|---|---|---|---|
+| 1 | PASS | 20/20 | 0 |
+| 2 | PASS | 20/20 | 0 |
+| 3 | PASS | 20/20 | 0 |
+| **Total** | **3/3** | **60/60** | **0** |
+
+Each session independently started at DemoTicks sequence 1 and ended with `PULSE-0.1C USB CDC ROUND TRIP VERIFIED for synthetic DEMO frames.`
+
+**What this demonstrates:** the prior failure to get a second HELLO was reproduced on the old firmware; three successive opens worked after the DTR-aware update. This strongly supports the session-rearming fix for the tested mini-PC, hub and firmware combination, but does not conclusively isolate the original electrical/software cause.
+
+**Still pending:** long-run / 100-frame throughput, unplug-replug re-enumeration, LCD progress and colors, all nine inputs *during* traffic, fault injection and independent power tests. No real Somatic telemetry was transmitted. Do not interpret these observations as motor-safety or deterministic-loop certification.
+
 ## Upgrade to USB CDC
 
 On the Ubuntu mini-PC, use the existing `feat/pulse-0.1c-usb-cdc` branch (stacked on `feat/pulse-0.1a-foundation`):
@@ -182,7 +199,8 @@ If the port fails with permission denied, check `groups` and `ls -l` on the port
 - [ ] Green demo bar while receiving valid synthetic frames (RGB/BGR verification pending).
 - [ ] Device visually detects stale stream or closed connection.
 - [ ] Nine buttons and LCD activity remain functional during USB.
-- [ ] Unplug/replug and repeated USB serial open/close are stable.
+- [x] Three repeated USB serial open/close cycles without power-cycle: 3/3 HELLO, 60/60 matching ACK, 0 unexpected frames.
+- [ ] Physical USB unplug/replug re-enumeration and subsequent session verified.
 - [ ] No power, motor, CAN, actuation or calibration operation triggered.
 
 ## Protocol boundaries
