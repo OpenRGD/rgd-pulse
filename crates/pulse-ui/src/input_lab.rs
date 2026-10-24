@@ -101,11 +101,11 @@ pub const fn raw_gpio(raw: u8) -> Option<u8> {
         1 => Some(4),  // K2
         2 => Some(3),  // K3
         3 => Some(2),  // K4
-        4 => Some(16), // joystick vendor LEFT
-        5 => Some(20), // joystick vendor DOWN
-        6 => Some(17), // joystick vendor RIGHT
-        7 => Some(18), // joystick center
-        8 => Some(19), // joystick vendor UP
+        4 => Some(16), // raw GP16, operator measured physical LEFT
+        5 => Some(20), // raw GP20, operator measured physical DOWN
+        6 => Some(17), // raw GP17, operator measured physical CLICK
+        7 => Some(18), // raw GP18, operator measured physical UP
+        8 => Some(19), // raw GP19, operator measured physical RIGHT
         _ => None,
     }
 }
