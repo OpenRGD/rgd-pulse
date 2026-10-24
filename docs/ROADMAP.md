@@ -4,7 +4,7 @@
 |---|---|---|
 | PULSE-0.1A | Versioned no_std frame, CRC, host observer, synthetic demo | Host unit tests; no real hardware or motion claims |
 | PULSE-0.1B | Pico W display local bring-up and input diagnostics | Hardware photo, pinout verified, operator tests all 9 inputs |
-| PULSE-0.1C | Bidirectional USB CDC, framing/resync, serial ID | Unplug/replug tested while Pico independently powered |
+| PULSE-0.1C | USB CDC bench handshake, stream framing/resync, explicit synthetic demo | Physical serial connect, stale detection, all 9 inputs operational during USB. Unique device ID deferred. |
 | PULSE-0.1D | Somatic telemetry read-only adapter | Measured jitter and deadline misses, no blocking of control loop |
 | PULSE-0.2 | Chronoscope | Referenced real Chronons, time provenance, no fabricated thoughts |
 | PULSE-0.3 | Console discovery and configuration | Explicit compatibility contract and staging tests |
