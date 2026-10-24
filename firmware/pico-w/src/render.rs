@@ -18,7 +18,7 @@ use embedded_graphics::{
 };
 use heapless::String;
 use pulse_ui::{
-    color_lab::{ColorLab, ColorMode},
+    color_lab::ColorLab,
     input_lab::{raw_gpio, InputLab},
     landscape_action,
     settings::Settings,
@@ -620,5 +620,4 @@ pub fn render_color_lab(f: &mut Frame<'_>, lab: &ColorLab) {
     fill(f, 0, 116, 128, 12, PANEL);
     small(f, "HOLD K1+K2: CANCEL", 6, 118, AMBER);
 
-    let _ = ColorMode::NormalBgr; // referenced in docs, all 4 modes compiled
 }
