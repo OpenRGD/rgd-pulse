@@ -26,7 +26,7 @@ use embassy_usb::{
 use lcd::Lcd;
 use panic_halt as _;
 use pulse_protocol::{encode, Frame, Kind, StreamDecoder};
-use pulse_ui::{landscape_action, UiState};
+use pulse_ui::{input_lab::InputLab, landscape_action, UiState};
 use render::{Frame as Framebuffer, RenderData, UsbState, PIXELS};
 use static_cell::StaticCell;
 
@@ -89,17 +89,21 @@ async fn main(spawner: Spawner) {
         Output::new(p.PIN_13, Level::Low),
     );
 
-    // Verified GPIO order from 0.1B, remapped in pulse-ui to final landscape.
+    // RAW scan index -> electrical pin is unchanged since 0.1B.
+    // The separately tested pulse_ui::landscape_action() interprets these
+    // in the FINAL physical orientation; reported on 2026-10-24:
+    // GP18=UP, GP20=DOWN, GP16=LEFT, GP19=RIGHT, GP17=CLICK.
+    // Keep raw scanning independent of the operator-facing mapping.
     let keys = [
-        Input::new(p.PIN_8, Pull::Up),  // K1
-        Input::new(p.PIN_4, Pull::Up),  // K2
-        Input::new(p.PIN_3, Pull::Up),  // K3
-        Input::new(p.PIN_2, Pull::Up),  // K4
-        Input::new(p.PIN_16, Pull::Up), // old left -> operator up
-        Input::new(p.PIN_20, Pull::Up), // old down -> operator left
-        Input::new(p.PIN_17, Pull::Up), // old right -> operator down
-        Input::new(p.PIN_18, Pull::Up), // click
-        Input::new(p.PIN_19, Pull::Up), // old up -> operator right
+        Input::new(p.PIN_8, Pull::Up),  // index 0: K1
+        Input::new(p.PIN_4, Pull::Up),  // index 1: K2
+        Input::new(p.PIN_3, Pull::Up),  // index 2: K3
+        Input::new(p.PIN_2, Pull::Up),  // index 3: K4
+        Input::new(p.PIN_16, Pull::Up), // index 4: observed LEFT
+        Input::new(p.PIN_20, Pull::Up), // index 5: observed DOWN
+        Input::new(p.PIN_17, Pull::Up), // index 6: observed CLICK
+        Input::new(p.PIN_18, Pull::Up), // index 7: observed UP
+        Input::new(p.PIN_19, Pull::Up), // index 8: observed RIGHT
     ];
 
     static FRAME: StaticCell<[u16; PIXELS]> = StaticCell::new();
@@ -114,6 +118,7 @@ async fn main(spawner: Spawner) {
     Timer::after_millis(350).await;
 
     let mut ui = UiState::new(); // K1 SOMATIC default
+    let mut input_lab = InputLab::new(); // Hold K1+K4 >=1.2s to toggle raw GPIO diagnostics
     let mut decoder = StreamDecoder::new();
     let mut rx_packet = [0u8; 64];
     let mut usb_connected = false;
@@ -231,33 +236,48 @@ async fn main(spawner: Spawner) {
             needs_draw = true;
         }
 
-        // Edge-triggered local button actions. A held key produces one press;
-        // debounce suppresses short release/repress chatter.
+        // Sample all nine raw GPIO inputs. Do not infer the physical axis
+        // from navigation output: INPUT LAB shows pin identity vs software map
+        // side by side. Hold K1+K4 for 1200ms to enter/leave the lab.
         let mut mask = 0u16;
         for (index, key) in keys.iter().enumerate() {
-            if key.is_low() { mask |= 1 << index; }
+            if key.is_low() {
+                mask |= 1 << index;
+            }
         }
+        let previously_in_lab = input_lab.active;
+        needs_draw |= input_lab.observe(mask, now_ms);
+
+        // Edge-triggered UI gestures retain the proven original semantics.
+        // While INPUT LAB is active (or a toggle chord is held), no normal
+        // screen navigation happens; raw joystick sampling still continues.
         let pressed = mask & !previous_mask;
-        for index in 0..9 {
-            if (pressed & (1 << index)) != 0 &&
-                (last_key_ms[index] == 0 ||
-                 now_ms.saturating_sub(last_key_ms[index]) >= BUTTON_DEBOUNCE_MS)
-            {
-                last_key_ms[index] = now_ms.max(1);
-                if let Some(action) = landscape_action(index) {
-                    needs_draw |= ui.handle(action);
+        if !input_lab.active && !previously_in_lab && !input_lab.chord_held() {
+            for index in 0..9 {
+                if (pressed & (1 << index)) != 0
+                    && (last_key_ms[index] == 0
+                        || now_ms.saturating_sub(last_key_ms[index]) >= BUTTON_DEBOUNCE_MS)
+                {
+                    last_key_ms[index] = now_ms.max(1);
+                    if let Some(action) = landscape_action(index) {
+                        needs_draw |= ui.handle(action);
+                    }
                 }
             }
         }
         previous_mask = mask;
 
         if needs_draw {
-            let info = RenderData {
-                usb: new_usb_state,
-                demo_sequence: last_demo_sequence.unwrap_or(0),
-                invalid_frames,
-            };
-            render::render(&mut image, &ui, &info);
+            if input_lab.active {
+                render::render_input_lab(&mut image, &input_lab);
+            } else {
+                let info = RenderData {
+                    usb: new_usb_state,
+                    demo_sequence: last_demo_sequence.unwrap_or(0),
+                    invalid_frames,
+                };
+                render::render(&mut image, &ui, &info);
+            }
             lcd.flush_rgb565(image.data);
             needs_draw = false;
         }

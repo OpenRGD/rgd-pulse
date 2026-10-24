@@ -5,6 +5,8 @@
 //! Non-actuating state machine, independent from hardware, USB and rendering.
 //! All controls are local. No joystick or K-key represents a motion command.
 
+pub mod input_lab;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum Page {
@@ -45,23 +47,27 @@ pub enum Action {
     Click,
 }
 
-/// Input bit order from existing, operator-proven board bring-up:
-/// K1 GP8, K2 GP4, K3 GP3, K4 GP2,
-/// joystick raw LEFT GP16, DOWN GP20, RIGHT GP17, CENTER GP18, UP GP19.
-/// In operator landscape (+90 degrees clockwise physical board), the
-/// physical joystick directions must be remapped to these logical actions.
-/// This map requires final orientation verification with hardware.
+/// Physical INPUT LAB measurements supplied by the operator on 2026-10-24,
+/// board held with joystick LEFT, K1..K4 RIGHT:
+///
+///   physical UP=GP18; DOWN=GP20; LEFT=GP16; RIGHT=GP19; CLICK=GP17.
+///   K1=GP8; K2=GP4; K3=GP3; K4=GP2 remain unchanged.
+///
+/// These observations deliberately override the earlier orientation-derived
+/// guess and differ from the vendor's nominal GP17/GP18 right/center labels.
+/// Re-verify UP/CLICK in the next physical regression; do not alter raw GPIO
+/// wiring or infer hardware damage from the unexpected pin association.
 pub const fn landscape_action(raw_index: usize) -> Option<Action> {
     match raw_index {
-        0 => Some(Action::Page(Page::Somatic)),
-        1 => Some(Action::Page(Page::Chronons)),
-        2 => Some(Action::Page(Page::Imu)),
-        3 => Some(Action::Page(Page::System)),
-        4 => Some(Action::Up),    // original LEFT GP16
-        5 => Some(Action::Left),  // original DOWN GP20
-        6 => Some(Action::Down),  // original RIGHT GP17
-        7 => Some(Action::Click), // center GP18
-        8 => Some(Action::Right), // original UP GP19
+        0 => Some(Action::Page(Page::Somatic)),  // K1 GP8
+        1 => Some(Action::Page(Page::Chronons)), // K2 GP4
+        2 => Some(Action::Page(Page::Imu)),      // K3 GP3
+        3 => Some(Action::Page(Page::System)),   // K4 GP2
+        4 => Some(Action::Left),                 // GP16, physical LEFT
+        5 => Some(Action::Down),                 // GP20, physical DOWN
+        6 => Some(Action::Click),                // GP17, physical CLICK
+        7 => Some(Action::Up),                   // GP18, physical UP
+        8 => Some(Action::Right),                // GP19, physical RIGHT
         _ => None,
     }
 }
@@ -231,16 +237,47 @@ mod tests {
 
     #[test]
     fn landscape_joystick_is_transformed_at_input_boundary() {
-        for (raw, action) in [
-            (4, Action::Up),
-            (6, Action::Down),
-            (5, Action::Left),
-            (8, Action::Right),
-            (7, Action::Click),
+        // Operator's five physical Input Lab observations from 2026-10-24.
+        // Keep index=>GPIO conversion independent from the direction map.
+        for (raw, gpio, action) in [
+            (7, 18, Action::Up),
+            (5, 20, Action::Down),
+            (4, 16, Action::Left),
+            (8, 19, Action::Right),
+            (6, 17, Action::Click),
         ] {
+            assert_eq!(input_lab::raw_gpio(raw as u8), Some(gpio));
             assert_eq!(landscape_action(raw), Some(action));
         }
         assert_eq!(landscape_action(9), None);
+    }
+
+    #[test]
+    fn physically_reported_click_gp17_opens_and_closes_chronon_detail() {
+        // Prior prototype software treated GP18 as CLICK. On this observed
+        // assembly the operator reports GP17 is the joystick center press.
+        let mut ui = UiState::new();
+        ui.handle(Action::Page(Page::Chronons));
+        let raw_for_gp17 = 6;
+        assert_eq!(input_lab::raw_gpio(raw_for_gp17), Some(17));
+        assert_eq!(landscape_action(raw_for_gp17 as usize), Some(Action::Click));
+        ui.handle(landscape_action(raw_for_gp17 as usize).unwrap());
+        assert_eq!(ui.mode, Mode::Focus);
+        ui.handle(landscape_action(raw_for_gp17 as usize).unwrap());
+        assert_eq!(ui.mode, Mode::Browse);
+    }
+
+    #[test]
+    fn physically_reported_up_gp18_selects_previous_chronon() {
+        let mut ui = UiState::new();
+        ui.handle(Action::Page(Page::Chronons));
+        ui.handle(Action::Down);
+        assert_eq!(ui.selected(), 1);
+        let raw_for_gp18 = 7;
+        assert_eq!(input_lab::raw_gpio(raw_for_gp18), Some(18));
+        assert_eq!(landscape_action(raw_for_gp18 as usize), Some(Action::Up));
+        ui.handle(landscape_action(raw_for_gp18 as usize).unwrap());
+        assert_eq!(ui.selected(), 0);
     }
 
     #[test]

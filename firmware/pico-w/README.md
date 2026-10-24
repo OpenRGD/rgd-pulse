@@ -26,12 +26,20 @@
 
 **No joystick or K-key action is a robot motion command.**
 
+## INPUT LAB (PULSE-0.2C diagnostic candidate)
+
+**Physical functional acceptance PASS (2026-10-24, operator report):** joystick UP=GP18, DOWN=GP20, LEFT=GP16, RIGHT=GP19, CLICK=GP17, with K1–K4 correct. After reflashing the corrected `pulse_ui::landscape_action`, the operator confirmed all five inputs in Input Lab **and** normal four-screen graphical navigation, Chronon detail, Somatic focus/zoom and a 20/20 synthetic USB CDC ACK regression. GP17 CLICK and GP18 UP differ from the initial vendor-oriented hypothesis; do not regress to that earlier mapping.
+
+To recheck the mapping, **hold K1 + K4 for about 1.2 seconds** to enter a *local, read-only* GPIO diagnostic. Release the keys. Move each joystick direction once; the screen shows **RAW PIN GPnn** and its newly mapped **FW MAP** interpretation side by side, plus held/released status and a press counter. Tap each K key individually to confirm its physical GPIO. Hold K1+K4 again to exit. Normal K1–K4/joystick page navigation is suppressed while the lab is open.
+
+See [PULSE-0.2C INPUT LAB BENCH](../../docs/PULSE-0.2C-INPUT-LAB-BENCH.md) for a reproducible five-direction test and a concise report format. This mode sends **no hardware, CAN or actuator commands**, and has no remote USB control endpoints.
+
 ## Compile and flash
 
 ```bash
 cd ~/openrgd/rgd-pulse
 git fetch origin
-git switch feat/pulse-0.2b-chronoscope-four-pages
+git switch feat/pulse-0.2c-input-lab
 git pull --ff-only
 cargo test --workspace
 
@@ -53,7 +61,7 @@ Power **only** from the Pico's Micro-USB port via a real data hub. If flashing, 
 
 ## Still unverified on physical 0.2B firmware
 
-- Physical 0.2B first flash confirmed splash, graphics and K1–K4; **180° corrected display orientation (0x60)**, RGB/BGR order, X/Y offsets, clipping and logical joystick direction mapping still need validation.
+- Physical 0.2C input mapping and normal page/focus/zoom behavior were operator-verified, and synthetic HELLO/ACK transport passed 20/20. ST7735S RGB/BGR fidelity, precise X/Y offsets and clipping remain separate physical qualifications.
 - Actual redraw latency and joysticks during simultaneous USB traffic.
 - 3/3 repeated serial opens, 100/100 ACK and cable disconnect/reconnect regressions.
 - Real Somatic loop measurement, Chronograph provenance/Chronon data, calibrated IMU, full joint mapping and measured voltage.
