@@ -48,7 +48,7 @@ impl InputRepeater {
                     self.next_at[index] = now_ms.saturating_add(INITIAL_DELAY_MS);
                 }
                 Some(started) => {
-                    if now_ms >= self.next_at[index] {
+                    if self.next_at[index] != u64::MAX && now_ms >= self.next_at[index] {
                         repeat_mask |= 1u16 << index;
                         let elapsed = now_ms.saturating_sub(started);
                         let period = if elapsed >= 3000 {
