@@ -20,10 +20,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tungstenite::{
-    stream::MaybeTlsStream,
-    Message,
-};
+use tungstenite::{stream::MaybeTlsStream, Message};
 
 const MAX_TX_RATE_HZ: u64 = 10;
 const MIN_TX_INTERVAL: Duration = Duration::from_millis(100);
@@ -44,7 +41,10 @@ pub fn host_monotonic_ns() -> io::Result<u64> {
         return Err(io::Error::last_os_error());
     }
     if ts.tv_sec < 0 || !(0..1_000_000_000).contains(&ts.tv_nsec) {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid CLOCK_MONOTONIC"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid CLOCK_MONOTONIC",
+        ));
     }
     Ok((ts.tv_sec as u64)
         .saturating_mul(1_000_000_000)
@@ -69,8 +69,11 @@ fn expect_pico_hello(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
                     }
                 }
             }
-            Err(error) if matches!(error.kind(),
-                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) => {}
             Err(error) => return Err(Box::new(error)),
         }
     }
@@ -92,8 +95,11 @@ fn require_imu_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error
                     }
                 }
             }
-            Err(error) if matches!(error.kind(),
-                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) => {}
             Err(error) => return Err(Box::new(error)),
         }
     }
@@ -102,7 +108,8 @@ fn require_imu_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error
 
 /// Uses a fixed local WS endpoint only; never accepts arbitrary URLs to
 /// avoid SSRF/network disclosure and accidental LAN gateway exposure.
-fn connect_console() -> Result<tungstenite::WebSocket<MaybeTlsStream<std::net::TcpStream>>, Box<dyn Error>> {
+fn connect_console(
+) -> Result<tungstenite::WebSocket<MaybeTlsStream<std::net::TcpStream>>, Box<dyn Error>> {
     let (mut socket, _) = tungstenite::connect(WS_STREAM_URL)?;
     match socket.get_mut() {
         MaybeTlsStream::Plain(stream) => stream.set_read_timeout(Some(WS_TIMEOUT))?,
@@ -131,7 +138,9 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
     if !serial_by_id.starts_with("/dev/serial/by-id/usb-OpenRGD_RGD_Pulse_Pico_W_")
         || !serial_by_id.ends_with("-if00")
     {
-        return Err("Pico by-id USB CDC identity required; never use IMU/CH340 or guessed ttyACM0".into());
+        return Err(
+            "Pico by-id USB CDC identity required; never use IMU/CH340 or guessed ttyACM0".into(),
+        );
     }
     println!("PULSE/IMU-1 read-only physical sensor; NO MOTION / SENSOR AXES UNVERIFIED");
     println!("Connecting only to Console WebSocket at ws://127.0.0.1:8088");
@@ -214,15 +223,20 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
                 break;
             }
             Ok(_) => ignored = ignored.saturating_add(1),
-            Err(tungstenite::Error::Io(ref error)) if matches!(error.kind(),
-                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => {}
+            Err(tungstenite::Error::Io(ref error))
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) => {}
             Err(error) => return Err(Box::new(error)),
         }
     }
     println!("PULSE IMU SUMMARY: forwarded={sent} rejected={rejected} non_imu={ignored}");
     println!("When no more IMU data arrives, Pico must show STALE then NO SOURCE after reset.");
     if sent == 0 {
-        return Err("no verified IMU observations forwarded; confirm publisher & Console WS".into());
+        return Err(
+            "no verified IMU observations forwarded; confirm publisher & Console WS".into(),
+        );
     }
     Ok(())
 }
@@ -233,10 +247,15 @@ mod tests {
 
     #[test]
     fn binding_is_hardcoded_to_ipv4_loopback_no_write_api() {
-        assert_eq!(WS_STREAM_URL, "ws://127.0.0.1:8088/api/v1/stream?robot_id=paky-01");
+        assert_eq!(
+            WS_STREAM_URL,
+            "ws://127.0.0.1:8088/api/v1/stream?robot_id=paky-01"
+        );
         assert!(!WS_STREAM_URL.contains("0.0.0.0"));
-        assert_eq!(console_imu::REST_LATEST_URL,
-            "http://127.0.0.1:8088/api/v1/robots/paky-01/imu");
+        assert_eq!(
+            console_imu::REST_LATEST_URL,
+            "http://127.0.0.1:8088/api/v1/robots/paky-01/imu"
+        );
     }
 
     #[test]

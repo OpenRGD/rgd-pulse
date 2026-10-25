@@ -176,9 +176,7 @@ pub fn decode(raw: &[u8]) -> Result<Frame, Error> {
             Ok(Frame::SensorSample(Sample {
                 session,
                 sequence,
-                age_at_host_forward_ms: u32::from_le_bytes(
-                    raw[30..34].try_into().unwrap(),
-                ),
+                age_at_host_forward_ms: u32::from_le_bytes(raw[30..34].try_into().unwrap()),
                 angles_cdeg,
                 gyro_centirad_s,
                 accel_centims2,
@@ -281,7 +279,11 @@ mod tests {
 
     #[test]
     fn probe_ack_and_imu_have_distinct_magic_from_pulse1() {
-        for frame in [Frame::Probe, Frame::ProbeAck, Frame::SensorSample(example())] {
+        for frame in [
+            Frame::Probe,
+            Frame::ProbeAck,
+            Frame::SensorSample(example()),
+        ] {
             let encoded = encode(frame);
             assert_eq!(&encoded[..2], b"IM");
             assert_ne!(&encoded[..2], b"RP");
@@ -329,7 +331,10 @@ mod tests {
     fn no_temperature_does_not_invent_sensor_temperature() {
         let mut s = example();
         s.temperature_cdeg = None;
-        assert_eq!(decode(&encode(Frame::SensorSample(s))), Ok(Frame::SensorSample(s)));
+        assert_eq!(
+            decode(&encode(Frame::SensorSample(s))),
+            Ok(Frame::SensorSample(s))
+        );
     }
 
     #[test]

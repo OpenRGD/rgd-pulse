@@ -12,7 +12,7 @@
 
 use pulse_protocol::imu_wire;
 use pulse_ui::imu::{
-    FrameQuality, ImuSample, Origin, ImuView, ROBOT_ID, SENSOR_FRAME_ID, SENSOR_ID, SOURCE_ID,
+    FrameQuality, ImuSample, ImuView, Origin, ROBOT_ID, SENSOR_FRAME_ID, SENSOR_ID, SOURCE_ID,
 };
 use serde::Deserialize;
 
@@ -148,9 +148,7 @@ fn validate_observation(
     if obs.host_monotonic_ns > now_host_monotonic_ns {
         return Err(Rejection::InvalidTimestamp);
     }
-    let age_ms = now_host_monotonic_ns
-        .saturating_sub(obs.host_monotonic_ns)
-        / 1_000_000;
+    let age_ms = now_host_monotonic_ns.saturating_sub(obs.host_monotonic_ns) / 1_000_000;
     if age_ms > MAX_FORWARD_AGE_MS as u64 {
         // The Console itself does not claim an observation older than 3s
         // is available in REST latest. Reject stale WebSocket backlog.
@@ -203,19 +201,20 @@ pub fn parse_stream_frame(
     if json.len() > MAX_JSON_BYTES {
         return Err(Rejection::InvalidJson);
     }
-    let root: serde_json::Value =
-        serde_json::from_str(json).map_err(|_| Rejection::InvalidJson)?;
+    let root: serde_json::Value = serde_json::from_str(json).map_err(|_| Rejection::InvalidJson)?;
     if root.get("type").and_then(serde_json::Value::as_str) != Some("imu") {
         return Ok(None);
     }
     let env: Envelope = serde_json::from_value(root).map_err(|_| Rejection::InvalidJson)?;
-    if env.kind != "imu" || env.schema_version != CONSOLE_STREAM_SCHEMA
-        || env.robot_id != ROBOT_ID || env.emitted_at.is_empty()
+    if env.kind != "imu"
+        || env.schema_version != CONSOLE_STREAM_SCHEMA
+        || env.robot_id != ROBOT_ID
+        || env.emitted_at.is_empty()
     {
         return Err(Rejection::WrongSchema);
     }
-    let obs: ConsoleSample = serde_json::from_value(env.data)
-        .map_err(|_| Rejection::InvalidJson)?;
+    let obs: ConsoleSample =
+        serde_json::from_value(env.data).map_err(|_| Rejection::InvalidJson)?;
     let sample = validate_observation(obs, now_host_monotonic_ns, origin)?;
     Ok(Some(sample))
 }
@@ -229,16 +228,12 @@ pub fn parse_rest_latest(
     if json.len() > MAX_JSON_BYTES {
         return Err(Rejection::InvalidJson);
     }
-    let root: serde_json::Value =
-        serde_json::from_str(json).map_err(|_| Rejection::InvalidJson)?;
+    let root: serde_json::Value = serde_json::from_str(json).map_err(|_| Rejection::InvalidJson)?;
     if root.is_null() {
         return Ok(None);
     }
-    let obs: ConsoleSample = serde_json::from_value(root)
-        .map_err(|_| Rejection::InvalidJson)?;
-    let sample = validate_observation(
-        obs, now_host_monotonic_ns, Origin::ImportedJsonUnverified
-    )?;
+    let obs: ConsoleSample = serde_json::from_value(root).map_err(|_| Rejection::InvalidJson)?;
+    let sample = validate_observation(obs, now_host_monotonic_ns, Origin::ImportedJsonUnverified)?;
     Ok(Some(sample))
 }
 
@@ -303,7 +298,9 @@ pub fn to_wire(sample: ImuSample) -> Result<imu_wire::Sample, Rejection> {
     {
         return Err(Rejection::InvalidProvenance);
     }
-    let age = sample.host_age_at_forward_ms.ok_or(Rejection::InvalidTimestamp)?;
+    let age = sample
+        .host_age_at_forward_ms
+        .ok_or(Rejection::InvalidTimestamp)?;
     Ok(imu_wire::Sample {
         session: sample.source_session,
         sequence: sample.source_sequence,
@@ -355,21 +352,33 @@ mod tests {
     const HOST_MONO_NOW: u64 = 96892502830994;
 
     fn envelope() -> String {
-        format!(r#"{{"schema_version":"console.v1","type":"imu","robot_id":"paky-01","emitted_at":"2026-10-24T14:41:50Z","data":{OBS}}}"#)
+        format!(
+            r#"{{"schema_version":"console.v1","type":"imu","robot_id":"paky-01","emitted_at":"2026-10-24T14:41:50Z","data":{OBS}}}"#
+        )
     }
 
     #[test]
     fn actual_console_schema_quantizes_to_imu_wire_without_using_demo_ticks() {
         let (sample, _) = parse_stream_frame(
-            &envelope(), HOST_MONO_NOW, Origin::ConsoleReadOnlyObservation
-        ).unwrap().unwrap();
-        assert_eq!((sample.roll_cdeg, sample.pitch_cdeg, sample.yaw_cdeg), (-481,-736,-14810));
+            &envelope(),
+            HOST_MONO_NOW,
+            Origin::ConsoleReadOnlyObservation,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            (sample.roll_cdeg, sample.pitch_cdeg, sample.yaw_cdeg),
+            (-481, -736, -14810)
+        );
         assert_eq!(sample.accel_mm_s2, [1259, -819, 9749]);
         assert_eq!(sample.temp_cdeg, Some(2401));
         assert_eq!(sample.host_age_at_forward_ms, Some(100));
         let payload = to_wire(sample).unwrap();
-        assert_eq!(decode(&encode(Frame::SensorSample(payload))), Ok(Frame::SensorSample(payload)));
-        assert_eq!(payload.gyro_centirad_s, [0,0,0]);
+        assert_eq!(
+            decode(&encode(Frame::SensorSample(payload))),
+            Ok(Frame::SensorSample(payload))
+        );
+        assert_eq!(payload.gyro_centirad_s, [0, 0, 0]);
     }
 
     #[test]
@@ -386,38 +395,60 @@ mod tests {
     #[test]
     fn reject_wrong_consumer_contract_source_and_eligibility_claims() {
         let obs = envelope();
-        assert_eq!(parse_stream_frame(
-            &obs.replace("console.imu.v0.1-candidate","openrgd.imu-sample.v0.1-candidate"),
-            HOST_MONO_NOW, Origin::ConsoleReadOnlyObservation
-        ), Err(Rejection::WrongSchema));
-        assert_eq!(parse_stream_frame(
-            &obs.replace("\"observation_only\": true", "\"observation_only\": false"),
-            HOST_MONO_NOW, Origin::ConsoleReadOnlyObservation
-        ), Err(Rejection::InvalidProvenance));
-        assert_eq!(parse_stream_frame(
-            &obs.replace("paky01-wit-serial", "fake-imu"),
-            HOST_MONO_NOW, Origin::ConsoleReadOnlyObservation
-        ), Err(Rejection::WrongSource));
+        assert_eq!(
+            parse_stream_frame(
+                &obs.replace(
+                    "console.imu.v0.1-candidate",
+                    "openrgd.imu-sample.v0.1-candidate"
+                ),
+                HOST_MONO_NOW,
+                Origin::ConsoleReadOnlyObservation
+            ),
+            Err(Rejection::WrongSchema)
+        );
+        assert_eq!(
+            parse_stream_frame(
+                &obs.replace("\"observation_only\": true", "\"observation_only\": false"),
+                HOST_MONO_NOW,
+                Origin::ConsoleReadOnlyObservation
+            ),
+            Err(Rejection::InvalidProvenance)
+        );
+        assert_eq!(
+            parse_stream_frame(
+                &obs.replace("paky01-wit-serial", "fake-imu"),
+                HOST_MONO_NOW,
+                Origin::ConsoleReadOnlyObservation
+            ),
+            Err(Rejection::WrongSource)
+        );
     }
 
     #[test]
     fn allow_nonincreasing_host_timestamp_only_with_increasing_sequence() {
         let (s, t) = parse_stream_frame(
-            &envelope(), HOST_MONO_NOW, Origin::ConsoleReadOnlyObservation
-        ).unwrap().unwrap();
+            &envelope(),
+            HOST_MONO_NOW,
+            Origin::ConsoleReadOnlyObservation,
+        )
+        .unwrap()
+        .unwrap();
         let mut g = StreamGuard::default();
         g.accept(s, t, HOST_MONO_NOW).unwrap();
-        assert_eq!(g.accept(s,t,HOST_MONO_NOW),Err(Rejection::Replay));
+        assert_eq!(g.accept(s, t, HOST_MONO_NOW), Err(Rejection::Replay));
         let mut fresh = s;
         fresh.source_sequence += 1;
-        g.accept(fresh,t,HOST_MONO_NOW).unwrap();
+        g.accept(fresh, t, HOST_MONO_NOW).unwrap();
         fresh.source_sequence += 1;
-        assert_eq!(g.accept(fresh,t-1,HOST_MONO_NOW),Err(Rejection::Replay));
+        assert_eq!(
+            g.accept(fresh, t - 1, HOST_MONO_NOW),
+            Err(Rejection::Replay)
+        );
     }
 
     #[test]
     fn rest_null_is_no_source_and_sample_untrusted_until_ws_subscription() {
-        assert_eq!(parse_rest_latest("null", HOST_MONO_NOW),Ok(None));
+        assert_eq!(parse_rest_latest("null", HOST_MONO_NOW), Ok(None));
         let (s, _) = parse_rest_latest(OBS, HOST_MONO_NOW).unwrap().unwrap();
         assert_eq!(s.origin, Origin::ImportedJsonUnverified);
         assert_eq!(to_wire(s), Err(Rejection::InvalidProvenance));
@@ -425,11 +456,21 @@ mod tests {
 
     #[test]
     fn reject_stale_unknown_or_future_clock_source() {
-        assert_eq!(parse_stream_frame(
-            &envelope(), HOST_MONO_NOW + 3_001_000_000, Origin::ConsoleReadOnlyObservation
-        ), Err(Rejection::InvalidTimestamp));
-        assert_eq!(parse_stream_frame(
-            &envelope(), HOST_MONO_NOW - 150_000_000, Origin::ConsoleReadOnlyObservation
-        ), Err(Rejection::InvalidTimestamp));
+        assert_eq!(
+            parse_stream_frame(
+                &envelope(),
+                HOST_MONO_NOW + 3_001_000_000,
+                Origin::ConsoleReadOnlyObservation
+            ),
+            Err(Rejection::InvalidTimestamp)
+        );
+        assert_eq!(
+            parse_stream_frame(
+                &envelope(),
+                HOST_MONO_NOW - 150_000_000,
+                Origin::ConsoleReadOnlyObservation
+            ),
+            Err(Rejection::InvalidTimestamp)
+        );
     }
 }

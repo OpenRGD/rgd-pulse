@@ -68,8 +68,13 @@ struct SkinPalette {
 fn palette(id: SkinId) -> SkinPalette {
     match id {
         SkinId::Classic => SkinPalette {
-            bg: BG, panel: PANEL, border: BORDER, text: WHITE,
-            muted: MUTED, accent: CYAN, positive: GREEN,
+            bg: BG,
+            panel: PANEL,
+            border: BORDER,
+            text: WHITE,
+            muted: MUTED,
+            accent: CYAN,
+            positive: GREEN,
         },
         SkinId::Phosphor => SkinPalette {
             bg: Rgb565::new(0, 2, 1),
@@ -107,14 +112,23 @@ fn palette(id: SkinId) -> SkinPalette {
 impl Frame<'_> {
     fn skin_color(&self, token: Rgb565) -> Rgb565 {
         let p = palette(self.skin);
-        if token == BG { p.bg }
-        else if token == PANEL { p.panel }
-        else if token == BORDER { p.border }
-        else if token == WHITE { p.text }
-        else if token == MUTED { p.muted }
-        else if token == CYAN { p.accent }
-        else if token == GREEN { p.positive }
-        else { token } // AMBER and RED keep their warning semantics.
+        if token == BG {
+            p.bg
+        } else if token == PANEL {
+            p.panel
+        } else if token == BORDER {
+            p.border
+        } else if token == WHITE {
+            p.text
+        } else if token == MUTED {
+            p.muted
+        } else if token == CYAN {
+            p.accent
+        } else if token == GREEN {
+            p.positive
+        } else {
+            token
+        } // AMBER and RED keep their warning semantics.
     }
 
     fn clear(&mut self) {
@@ -146,7 +160,12 @@ impl DrawTarget for Frame<'_> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum UsbState { Disconnected, Open, DemoFresh, DemoStale }
+pub enum UsbState {
+    Disconnected,
+    Open,
+    DemoFresh,
+    DemoStale,
+}
 
 pub struct RenderData {
     pub usb: UsbState,
@@ -156,31 +175,45 @@ pub struct RenderData {
 
 fn fill(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, c: Rgb565) {
     let _ = Rectangle::new(Point::new(x, y), Size::new(w, h))
-        .into_styled(PrimitiveStyle::with_fill(f.skin_color(c))).draw(f);
+        .into_styled(PrimitiveStyle::with_fill(f.skin_color(c)))
+        .draw(f);
 }
 fn stroke(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, c: Rgb565) {
     let _ = Rectangle::new(Point::new(x, y), Size::new(w, h))
-        .into_styled(PrimitiveStyle::with_stroke(f.skin_color(c), 1)).draw(f);
+        .into_styled(PrimitiveStyle::with_stroke(f.skin_color(c), 1))
+        .draw(f);
 }
 fn line(f: &mut Frame<'_>, x0: i32, y0: i32, x1: i32, y1: i32, c: Rgb565) {
     let _ = Line::new(Point::new(x0, y0), Point::new(x1, y1))
-        .into_styled(PrimitiveStyle::with_stroke(f.skin_color(c), 1)).draw(f);
+        .into_styled(PrimitiveStyle::with_stroke(f.skin_color(c), 1))
+        .draw(f);
 }
 fn small(f: &mut Frame<'_>, text: &str, x: i32, y: i32, c: Rgb565) {
-    let _ = Text::with_baseline(text, Point::new(x, y),
-        MonoTextStyle::new(&FONT_5X8, f.skin_color(c)), Baseline::Top).draw(f);
+    let _ = Text::with_baseline(
+        text,
+        Point::new(x, y),
+        MonoTextStyle::new(&FONT_5X8, f.skin_color(c)),
+        Baseline::Top,
+    )
+    .draw(f);
 }
 fn big(f: &mut Frame<'_>, text: &str, x: i32, y: i32, c: Rgb565) {
-    let _ = Text::with_baseline(text, Point::new(x, y),
-        MonoTextStyle::new(&FONT_7X13_BOLD, f.skin_color(c)), Baseline::Top).draw(f);
+    let _ = Text::with_baseline(
+        text,
+        Point::new(x, y),
+        MonoTextStyle::new(&FONT_7X13_BOLD, f.skin_color(c)),
+        Baseline::Top,
+    )
+    .draw(f);
 }
 fn badge(f: &mut Frame<'_>, text: &str, x: i32, y: i32, c: Rgb565) {
     fill(f, x - 2, y - 2, 28, 12, PANEL);
     small(f, text, x, y, c);
 }
 fn circle(f: &mut Frame<'_>, x: i32, y: i32, diameter: u32, c: Rgb565) {
-    let _ = Circle::new(Point::new(x,y), diameter)
-        .into_styled(PrimitiveStyle::with_fill(f.skin_color(c))).draw(f);
+    let _ = Circle::new(Point::new(x, y), diameter)
+        .into_styled(PrimitiveStyle::with_fill(f.skin_color(c)))
+        .draw(f);
 }
 
 /// Deterministic *illustrative* trend samples; never host/runtime readings.
@@ -207,10 +240,10 @@ fn demo_chart(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, state: &UiState
         let value = demo_sample(sample, state.selected());
         let yy = y + h as i32 - 3 - value * (h as i32 - 5) / 33;
         let xx = x + 1 + px as i32;
-        if let Some((ox,oy)) = old {
+        if let Some((ox, oy)) = old {
             line(f, ox, oy, xx, yy, CYAN);
         }
-        old = Some((xx,yy));
+        old = Some((xx, yy));
     }
     stroke(f, x, y, w, h, BORDER);
     // Chart styling changes with skin, chart values never change.
@@ -292,8 +325,19 @@ fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData, imu: &ImuView, n
         ("DEMO", AMBER)
     };
     badge(f, data_badge, 98, 3, data_color);
-    circle(f, 122, 3, 4, if state.usb == UsbState::Disconnected { MUTED }
-           else if state.usb == UsbState::DemoStale { RED } else { GREEN });
+    circle(
+        f,
+        122,
+        3,
+        4,
+        if state.usb == UsbState::Disconnected {
+            MUTED
+        } else if state.usb == UsbState::DemoStale {
+            RED
+        } else {
+            GREEN
+        },
+    );
 }
 
 fn footer(f: &mut Frame<'_>, ui: &UiState, state: &RenderData) {
@@ -304,7 +348,7 @@ fn footer(f: &mut Frame<'_>, ui: &UiState, state: &RenderData) {
     } else {
         fill(f, 0, 109, 128, 1, BORDER);
     }
-    for (i, tag) in ["1 LP","2 CH","3 IM","4 SY"].iter().enumerate() {
+    for (i, tag) in ["1 LP", "2 CH", "3 IM", "4 SY"].iter().enumerate() {
         let x = i as i32 * 32;
         let active = ui.page.index() == i;
         fill(f, x, 112, 31, 15, if active { CYAN } else { PANEL });
@@ -336,29 +380,55 @@ fn render_somatic(f: &mut Frame<'_>, ui: &UiState) {
 }
 
 fn sample_kind(idx: usize) -> &'static str {
-    match idx { 0 => "OBS", 1 => "PLAN", 2 => "NOTE", _ => "ERR" }
+    match idx {
+        0 => "OBS",
+        1 => "PLAN",
+        2 => "NOTE",
+        _ => "ERR",
+    }
 }
 fn sample_code(idx: usize) -> &'static str {
-    match idx { 0 => "D-01", 1 => "D-02", 2 => "D-03", _ => "D-04" }
+    match idx {
+        0 => "D-01",
+        1 => "D-02",
+        2 => "D-03",
+        _ => "D-04",
+    }
 }
 fn render_chronons(f: &mut Frame<'_>, ui: &UiState) {
     let filter = ui.window_index() as usize;
     if ui.mode == Mode::Focus {
-        let i = if filter == 0 {ui.selected() as usize} else {filter - 1};
+        let i = if filter == 0 {
+            ui.selected() as usize
+        } else {
+            filter - 1
+        };
         small(f, "SYNTHETIC CHRONON", 5, 20, AMBER);
         big(f, sample_code(i), 7, 34, WHITE);
         small(f, sample_kind(i), 85, 38, CYAN);
-        let lines = ["SOURCE: DEMO", "TIME: NOT SYNCED", "DATA: FIXTURE", "NO ROBOT EVENTS", "CLICK TO EXIT"];
+        let lines = [
+            "SOURCE: DEMO",
+            "TIME: NOT SYNCED",
+            "DATA: FIXTURE",
+            "NO ROBOT EVENTS",
+            "CLICK TO EXIT",
+        ];
         for row in 0..3 {
             let idx = (ui.detail_line as usize + row).min(lines.len() - 1);
-            small(f, lines[idx], 6, 61 + row as i32 * 13, if row == 0 {WHITE} else {MUTED});
+            small(
+                f,
+                lines[idx],
+                6,
+                61 + row as i32 * 13,
+                if row == 0 { WHITE } else { MUTED },
+            );
         }
         return;
     }
 
     let filters = ["ALL", "OBS", "PLAN", "NOTE", "ERR"];
     let mut buf: String<24> = String::new();
-    let _ = write!(buf,"FIXTURE / {} ONLY", filters[filter]);
+    let _ = write!(buf, "FIXTURE / {} ONLY", filters[filter]);
     small(f, &buf, 6, 20, AMBER);
     let row_height = 18;
     if filter != 0 {
@@ -374,12 +444,20 @@ fn render_chronons(f: &mut Frame<'_>, ui: &UiState) {
         for i in 0..4 {
             let y = 34 + i as i32 * row_height;
             let active = ui.selected() as usize == i;
-            fill(f, 4, y, 120, 16, if active {BORDER} else {PANEL});
-            if active {stroke(f, 4, y, 120, 16, CYAN);}
-            circle(f, 10, y+6, 4, if active {CYAN} else {MUTED});
-            small(f, sample_code(i), 22, y+4, WHITE);
-            small(f, sample_kind(i), 64, y+4, if active {CYAN} else {MUTED});
-            small(f, "DEMO", 99, y+4, AMBER);
+            fill(f, 4, y, 120, 16, if active { BORDER } else { PANEL });
+            if active {
+                stroke(f, 4, y, 120, 16, CYAN);
+            }
+            circle(f, 10, y + 6, 4, if active { CYAN } else { MUTED });
+            small(f, sample_code(i), 22, y + 4, WHITE);
+            small(
+                f,
+                sample_kind(i),
+                64,
+                y + 4,
+                if active { CYAN } else { MUTED },
+            );
+            small(f, "DEMO", 99, y + 4, AMBER);
         }
     }
 }
@@ -423,8 +501,14 @@ fn render_imu(f: &mut Frame<'_>, ui: &UiState, imu: &ImuView, now_ms: u64) {
             let fresh = status == ImuStatus::FreshSensorAxes;
             small(
                 f,
-                if fresh { "SENSOR XYZ / UNCAL" } else { "STALE SENSOR / UNCAL" },
-                5, 20, if fresh { GREEN } else { AMBER },
+                if fresh {
+                    "SENSOR XYZ / UNCAL"
+                } else {
+                    "STALE SENSOR / UNCAL"
+                },
+                5,
+                20,
+                if fresh { GREEN } else { AMBER },
             );
             let color = if fresh { WHITE } else { MUTED };
             let mut text: String<32> = String::new();
@@ -500,50 +584,97 @@ fn render_imu(f: &mut Frame<'_>, ui: &UiState, imu: &ImuView, now_ms: u64) {
 
 fn render_system(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
     let rows = ["MOTORS", "CAN BUS", "POWER", "HOST USB"];
-    let data = ["22 CFG / ON --", "NO BUS DATA", "DRIVE --.- V", "CDC STATUS"];
+    let data = [
+        "22 CFG / ON --",
+        "NO BUS DATA",
+        "DRIVE --.- V",
+        "CDC STATUS",
+    ];
     let i = ui.selected() as usize;
     if ui.mode == Mode::Focus {
         small(f, "SYSTEM / INSPECT", 5, 20, CYAN);
         big(f, rows[i], 6, 34, WHITE);
         if i == 3 {
-            big(f, if info.usb == UsbState::Disconnected {"OFF"} else {"LINK"}, 6, 53, GREEN);
+            big(
+                f,
+                if info.usb == UsbState::Disconnected {
+                    "OFF"
+                } else {
+                    "LINK"
+                },
+                6,
+                53,
+                GREEN,
+            );
         } else {
-            big(f, match i {0=>"22 CFG",1=>"--",_=>"--.- V"}, 6, 53, CYAN);
+            big(
+                f,
+                match i {
+                    0 => "22 CFG",
+                    1 => "--",
+                    _ => "--.- V",
+                },
+                6,
+                53,
+                CYAN,
+            );
         }
-        small(f, if i==0 {"ONLINE: UNKNOWN"} else if i==1 {"CAN: UNOBSERVED"}
-              else if i==2 {"VOLTAGE: NO SENSOR"} else {"USB ONLY / NO MOTOR"},5,76,AMBER);
-        small(f,"L/R: NEXT  CLICK: BACK",5,95,MUTED);
+        small(
+            f,
+            if i == 0 {
+                "ONLINE: UNKNOWN"
+            } else if i == 1 {
+                "CAN: UNOBSERVED"
+            } else if i == 2 {
+                "VOLTAGE: NO SENSOR"
+            } else {
+                "USB ONLY / NO MOTOR"
+            },
+            5,
+            76,
+            AMBER,
+        );
+        small(f, "L/R: NEXT  CLICK: BACK", 5, 95, MUTED);
         return;
     }
 
     for index in 0..4 {
-        let y=21 + index as i32 * 22;
-        let active = index==i;
-        fill(f,4,y,120,20,if active {BORDER} else {PANEL});
-        if active {stroke(f,4,y,120,20,CYAN);}
-        small(f,rows[index],9,y+3,if active {WHITE} else {MUTED});
-        if index==3 {
-            small(f,if info.usb==UsbState::Disconnected {"USB OFF"} else {"USB ON"},
-                9,y+11,if info.usb==UsbState::Disconnected {RED} else {GREEN});
+        let y = 21 + index as i32 * 22;
+        let active = index == i;
+        fill(f, 4, y, 120, 20, if active { BORDER } else { PANEL });
+        if active {
+            stroke(f, 4, y, 120, 20, CYAN);
+        }
+        small(f, rows[index], 9, y + 3, if active { WHITE } else { MUTED });
+        if index == 3 {
+            small(
+                f,
+                if info.usb == UsbState::Disconnected {
+                    "USB OFF"
+                } else {
+                    "USB ON"
+                },
+                9,
+                y + 11,
+                if info.usb == UsbState::Disconnected {
+                    RED
+                } else {
+                    GREEN
+                },
+            );
         } else {
-            small(f,data[index],9,y+11,AMBER);
+            small(f, data[index], 9, y + 11, AMBER);
         }
         // Segmented motor reference inventory is a reference, NOT an online test.
-        if index==0 {
+        if index == 0 {
             for n in 0..11 {
-                fill(f,74+n*4, y+3, 2, 3, MUTED);
+                fill(f, 74 + n * 4, y + 3, 2, 3, MUTED);
             }
         }
     }
 }
 
-pub fn render(
-    f: &mut Frame<'_>,
-    ui: &UiState,
-    info: &RenderData,
-    imu: &ImuView,
-    now_ms: u64,
-) {
+pub fn render(f: &mut Frame<'_>, ui: &UiState, info: &RenderData, imu: &ImuView, now_ms: u64) {
     f.clear();
     top_bar(f, ui, info, imu, now_ms);
     match ui.page {
@@ -558,14 +689,13 @@ pub fn render(
 /// A short opening splash: informative only, no inference about robot readiness.
 pub fn splash(f: &mut Frame<'_>) {
     f.clear();
-    stroke(f,8,8,112,112,CYAN);
-    fill(f,15,20,98,2,AMBER);
-    big(f,"OPENRGD",28,40,WHITE);
-    small(f,"PULSE / CHRONOSCOPE",10,66,CYAN);
-    small(f,"OBSERVATION ONLY",19,84,AMBER);
-    small(f,"NO MOTOR COMMANDS",18,101,MUTED);
+    stroke(f, 8, 8, 112, 112, CYAN);
+    fill(f, 15, 20, 98, 2, AMBER);
+    big(f, "OPENRGD", 28, 40, WHITE);
+    small(f, "PULSE / CHRONOSCOPE", 10, 66, CYAN);
+    small(f, "OBSERVATION ONLY", 19, 84, AMBER);
+    small(f, "NO MOTOR COMMANDS", 18, 101, MUTED);
 }
-
 
 /// Diagnostic page shows RAW pressed GPIO and the CURRENT SOFTWARE MAP
 /// separately. It does not infer physical joystick orientation.
@@ -630,7 +760,6 @@ pub fn render_input_lab(f: &mut Frame<'_>, lab: &InputLab) {
     fill(f, 0, 114, 128, 14, PANEL);
     small(f, "HOLD K1+K4: EXIT", 8, 117, AMBER);
 }
-
 
 /// Winamp-inspired local skin picker. The preview is immediately visible;
 /// CLICK applies for this power-on session, K2+K3 long hold cancels.
@@ -727,5 +856,4 @@ pub fn render_color_lab(f: &mut Frame<'_>, lab: &ColorLab) {
     small(f, "CLICK: APPLY", 6, 108, GREEN);
     fill(f, 0, 116, 128, 12, PANEL);
     small(f, "HOLD K1+K2: CANCEL", 6, 118, AMBER);
-
 }

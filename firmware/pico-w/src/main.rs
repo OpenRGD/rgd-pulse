@@ -137,7 +137,7 @@ async fn main(spawner: Spawner) {
     let mut input_lab = InputLab::new(); // K1+K4 >=1.2s: raw GPIO diagnostics
     let mut settings = Settings::new(); // K2+K3 >=1.2s: Winamp-style skin picker
     let mut color_lab = ColorLab::new(); // K1+K2 >=1.2s: LCD RGB/BGR x INV calibration
-    // Track the exact mode that lcd.init() applied before the splash.
+                                         // Track the exact mode that lcd.init() applied before the splash.
     let mut lcd_color_mode = VALIDATED_BOOT_MODE;
     let mut repeater = InputRepeater::new(); // Direction keys only, never CLICK/K1-K4
     let mut decoder = StreamDecoder::new(); // Existing PULSE/1 frames, unchanged
@@ -278,9 +278,7 @@ async fn main(spawner: Spawner) {
                                             sample.accel_centims2[2] as i32 * 10,
                                         ],
                                         temp_cdeg: sample.temperature_cdeg,
-                                        host_age_at_forward_ms: Some(
-                                            sample.age_at_host_forward_ms,
-                                        ),
+                                        host_age_at_forward_ms: Some(sample.age_at_host_forward_ms),
                                     };
                                     if imu_view
                                         .observe(observation, Instant::now().as_millis())
@@ -385,9 +383,8 @@ async fn main(spawner: Spawner) {
         } else {
             repeater.poll(mask, now_ms)
         };
-        let chord_blocked = input_lab.chord_held()
-            || settings.chord_held(mask)
-            || color_lab.chord_held(mask);
+        let chord_blocked =
+            input_lab.chord_held() || settings.chord_held(mask) || color_lab.chord_held(mask);
 
         if !input_lab.active && !was_in_lab && !overlay_switched && !chord_blocked {
             let events = pressed | repeated;
