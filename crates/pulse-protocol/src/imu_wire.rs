@@ -115,7 +115,8 @@ pub fn encode(frame: Frame) -> [u8; FRAME_LEN] {
             }
         }
     }
-    out[54..56].copy_from_slice(&crc16_ccitt_false(&out[..54]).to_le_bytes());
+    let checksum = crc16_ccitt_false(&out[..54]);
+    out[54..56].copy_from_slice(&checksum.to_le_bytes());
     out
 }
 
@@ -314,11 +315,13 @@ mod tests {
     fn rejects_sample_without_physical_uncalibrated_flags() {
         let mut raw = encode(Frame::SensorSample(example()));
         raw[4] &= !FLAG_SENSOR_AXES_UNVERIFIED;
-        raw[54..56].copy_from_slice(&crc16_ccitt_false(&raw[..54]).to_le_bytes());
+        let checksum = crc16_ccitt_false(&raw[..54]);
+        raw[54..56].copy_from_slice(&checksum.to_le_bytes());
         assert_eq!(decode(&raw), Err(Error::Flags));
         raw = encode(Frame::SensorSample(example()));
         raw[22..30].fill(0);
-        raw[54..56].copy_from_slice(&crc16_ccitt_false(&raw[..54]).to_le_bytes());
+        let checksum = crc16_ccitt_false(&raw[..54]);
+        raw[54..56].copy_from_slice(&checksum.to_le_bytes());
         assert_eq!(decode(&raw), Err(Error::EmptySessionOrSequence));
     }
 
