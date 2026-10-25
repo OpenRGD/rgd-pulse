@@ -24,7 +24,6 @@ const REFERENCE_FRAME: &str = "imu_sensor_axes_unverified";
 const TIME_QUALITY: &str = "host_receive_only_not_chronograph";
 const MAX_JSON_BYTES: usize = 16 * 1024;
 const MAX_FORWARD_AGE_MS: u32 = 3_000;
-const MAX_FUTURE_SKEW_NS: u64 = 100_000_000;
 
 #[derive(Debug, Deserialize)]
 struct Envelope {
@@ -144,7 +143,9 @@ fn validate_observation(
     {
         return Err(Rejection::InvalidTimestamp);
     }
-    if obs.host_monotonic_ns > now_host_monotonic_ns.saturating_add(MAX_FUTURE_SKEW_NS) {
+    // Same Ubuntu host CLOCK_MONOTONIC source as the Python IMU reader.
+    // A future host receipt is never a valid live sample; fail closed.
+    if obs.host_monotonic_ns > now_host_monotonic_ns {
         return Err(Rejection::InvalidTimestamp);
     }
     let age_ms = now_host_monotonic_ns
