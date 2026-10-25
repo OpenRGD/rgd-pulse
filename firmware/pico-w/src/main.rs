@@ -284,7 +284,10 @@ async fn main(spawner: Spawner) {
                                         .observe(observation, Instant::now().as_millis())
                                         .is_ok()
                                     {
-                                        needs_draw = true;
+                                        // Redraw physical IMU readings only on K3;
+                                        // avoid 10fps 32KiB SPI flushes on unrelated
+                                        // pages while receiving the same USB stream.
+                                        needs_draw |= ui.page == pulse_ui::Page::Imu;
                                     }
                                 }
                                 ImuFrame::SensorSample(_) | ImuFrame::ProbeAck => {
