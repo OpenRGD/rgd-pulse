@@ -9,3 +9,8 @@ description = "Synthetic host bridge demo for OpenRGD Pulse"
 serialport = { version = "4.8", default-features = false }
 pulse-core = { path = "../pulse-core" }
 pulse-protocol = { path = "../pulse-protocol" }
+pulse-ui = { path = "../pulse-ui" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libc = "0.2"
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
