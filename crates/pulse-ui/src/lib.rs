@@ -5,6 +5,7 @@
 //! Non-actuating state machine, independent from hardware, USB and rendering.
 //! All controls are local. No joystick or K-key represents a motion command.
 
+pub mod imu;
 pub mod input_lab;
 pub mod input_repeat;
 pub mod settings;
