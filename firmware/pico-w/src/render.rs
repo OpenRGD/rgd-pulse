@@ -19,6 +19,7 @@ use embedded_graphics::{
 use heapless::String;
 use pulse_ui::{
     color_lab::ColorLab,
+    imu::{ImuStatus, ImuView},
     input_lab::{raw_gpio, InputLab},
     landscape_action,
     settings::Settings,
@@ -236,7 +237,7 @@ fn demo_chart(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, state: &UiState
     }
 }
 
-fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData) {
+fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData, imu: &ImuView, now_ms: u64) {
     fill(f, 0, 0, 128, 16, PANEL);
     fill(f, 0, 15, 128, 1, CYAN);
     if f.skin == SkinId::Italia {
@@ -277,7 +278,20 @@ fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData) {
         fill(f, 80, 2, 17, 11, BORDER);
         small(f, &event, 83, 4, WHITE);
     }
-    badge(f, "DEMO", 98, 3, AMBER);
+    // Only the K3 IMU page may report real physical measurements.
+    // Other pages are still fixtures, even when the USB link is active.
+    let (data_badge, data_color) = if ui.page == Page::Imu {
+        match imu.status(now_ms) {
+            ImuStatus::FreshSensorAxes => ("RAW", GREEN),
+            ImuStatus::Stale => ("STALE", AMBER),
+            ImuStatus::AgeUnknown => ("AGE?", AMBER),
+            ImuStatus::NoSource => ("N/A", MUTED),
+            ImuStatus::Synthetic | ImuStatus::UntrustedImport => ("DEMO", AMBER),
+        }
+    } else {
+        ("DEMO", AMBER)
+    };
+    badge(f, data_badge, 98, 3, data_color);
     circle(f, 122, 3, 4, if state.usb == UsbState::Disconnected { MUTED }
            else if state.usb == UsbState::DemoStale { RED } else { GREEN });
 }
@@ -370,30 +384,118 @@ fn render_chronons(f: &mut Frame<'_>, ui: &UiState) {
     }
 }
 
-fn render_imu(f: &mut Frame<'_>, ui: &UiState) {
+/// Signed centidegree / centi-C helper for no_std 128x128 typography.
+fn signed_centi(value: i32) -> String<16> {
+    let mut out: String<16> = String::new();
+    let abs = value.unsigned_abs();
+    if value < 0 {
+        let _ = write!(out, "-{}.{:02}", abs / 100, abs % 100);
+    } else {
+        let _ = write!(out, "{}.{:02}", abs / 100, abs % 100);
+    }
+    out
+}
+
+/// Converts milli-SI fixed-point to a two-decimal visual approximation.
+/// The producer and bus retain the actual quantized SI source units.
+fn signed_milli_to_centi(value: i32) -> String<16> {
+    let centis = (value as i64 * 100 / 1000) as i32;
+    signed_centi(centis)
+}
+
+fn render_imu(f: &mut Frame<'_>, ui: &UiState, imu: &ImuView, now_ms: u64) {
+    let status = imu.status(now_ms);
+
     if ui.mode == Mode::Focus {
-        small(f, "SENSOR / GRAPH DEMO", 5, 20, AMBER);
-        let mut b: String<32> = String::new();
-        let _=write!(b,"ZOOM x{}  PAN {}",ui.zoom_factor(),ui.pan);
-        small(f,&b,6,32,WHITE);
-        demo_chart(f,5,45,118,55,ui);
-        small(f,"NOT CALIBRATED",6,101,AMBER);
+        // No historically sourced trend samples are available in this wave.
+        // A chart shown here remains an explicit synthetic fixture.
+        small(f, "IMU / GRAPH DEMO", 5, 20, AMBER);
+        let mut text: String<32> = String::new();
+        let _ = write!(text, "ZOOM x{} PAN {}", ui.zoom_factor(), ui.pan);
+        small(f, &text, 6, 33, WHITE);
+        demo_chart(f, 5, 46, 118, 53, ui);
+        small(f, "NOT REAL HISTORY", 6, 101, AMBER);
         return;
     }
 
-    small(f,"SENSOR XYZ / NO FEED",5,20,AMBER);
-    small(f,"ROLL",6,34,MUTED);
-    big(f,"--.-",36,30,WHITE);
-    small(f,"PITCH",6,49,MUTED);
-    big(f,"--.-",36,45,WHITE);
-    stroke(f,97,29,25,31,BORDER);
-    line(f,109,34,109,54,MUTED);
-    line(f,101,44,118,44,MUTED);
-    circle(f,107,42,5,AMBER);
-    let metric = ["ROLL","PITCH","GYRO","ACCEL"][ui.selected() as usize];
-    small(f,metric,5,65,CYAN);
-    small(f,"--    DEMO GRAPH",35,65,AMBER);
-    demo_chart(f,5,76,118,30,ui);
+    match (status, imu.sample()) {
+        (ImuStatus::FreshSensorAxes | ImuStatus::Stale, Some(sample)) => {
+            let fresh = status == ImuStatus::FreshSensorAxes;
+            small(
+                f,
+                if fresh { "SENSOR XYZ / UNCAL" } else { "STALE SENSOR / UNCAL" },
+                5, 20, if fresh { GREEN } else { AMBER },
+            );
+            let color = if fresh { WHITE } else { MUTED };
+            let mut text: String<32> = String::new();
+
+            let _ = write!(text, "ROLL   {}", signed_centi(sample.roll_cdeg as i32));
+            small(f, &text, 6, 33, color);
+            text.clear();
+
+            let _ = write!(text, "PITCH  {}", signed_centi(sample.pitch_cdeg as i32));
+            small(f, &text, 6, 44, color);
+            text.clear();
+
+            let _ = write!(text, "YAW*   {}", signed_centi(sample.yaw_cdeg as i32));
+            small(f, &text, 6, 55, AMBER);
+            text.clear();
+
+            // LEFT/RIGHT on the K3 base page switches X/Y/Z. No imaginary
+            // robot-body transform is inferred from sensor-frame axes.
+            let axis = ui.window_index().min(2) as usize;
+            let axis_name = ["X", "Y", "Z"][axis];
+            let _ = write!(
+                text,
+                "GYR {}  {}rad/s",
+                axis_name,
+                signed_milli_to_centi(sample.gyro_mrad_s[axis])
+            );
+            small(f, &text, 6, 68, color);
+            text.clear();
+
+            let _ = write!(
+                text,
+                "ACC {}  {}m/s2",
+                axis_name,
+                signed_milli_to_centi(sample.accel_mm_s2[axis])
+            );
+            small(f, &text, 6, 79, color);
+            text.clear();
+
+            if let Some(temp) = sample.temp_cdeg {
+                let _ = write!(text, "TEMP  {}C", signed_centi(temp as i32));
+            } else {
+                let _ = write!(text, "TEMP  --");
+            }
+            small(f, &text, 6, 90, MUTED);
+            text.clear();
+
+            if let Some(age) = imu.observed_age_ms(now_ms) {
+                let _ = write!(text, "AGE {}ms", age.min(99999));
+            } else {
+                let _ = write!(text, "AGE UNKNOWN");
+            }
+            small(f, &text, 6, 101, if fresh { GREEN } else { AMBER });
+        }
+        _ => {
+            // No trusted real sample: retain explicit unknown values. The
+            // small chart below is labelled DEMO, never physically sourced.
+            small(f, "SENSOR XYZ / NO FEED", 5, 20, AMBER);
+            small(f, "ROLL", 6, 34, MUTED);
+            big(f, "--.-", 36, 30, WHITE);
+            small(f, "PITCH", 6, 49, MUTED);
+            big(f, "--.-", 36, 45, WHITE);
+            stroke(f, 97, 29, 25, 31, BORDER);
+            line(f, 109, 34, 109, 54, MUTED);
+            line(f, 101, 44, 118, 44, MUTED);
+            circle(f, 107, 42, 5, AMBER);
+            let metric = ["ROLL", "PITCH", "GYRO", "ACCEL"][ui.selected() as usize];
+            small(f, metric, 5, 65, CYAN);
+            small(f, "--  DEMO CHART", 35, 65, AMBER);
+            demo_chart(f, 5, 76, 118, 30, ui);
+        }
+    }
 }
 
 fn render_system(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
@@ -435,16 +537,22 @@ fn render_system(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
     }
 }
 
-pub fn render(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
+pub fn render(
+    f: &mut Frame<'_>,
+    ui: &UiState,
+    info: &RenderData,
+    imu: &ImuView,
+    now_ms: u64,
+) {
     f.clear();
-    top_bar(f,ui,info);
+    top_bar(f, ui, info, imu, now_ms);
     match ui.page {
-        Page::Somatic => render_somatic(f,ui),
-        Page::Chronons => render_chronons(f,ui),
-        Page::Imu => render_imu(f,ui),
-        Page::System => render_system(f,ui,info),
+        Page::Somatic => render_somatic(f, ui),
+        Page::Chronons => render_chronons(f, ui),
+        Page::Imu => render_imu(f, ui, imu, now_ms),
+        Page::System => render_system(f, ui, info),
     }
-    footer(f,ui,info);
+    footer(f, ui, info);
 }
 
 /// A short opening splash: informative only, no inference about robot readiness.
