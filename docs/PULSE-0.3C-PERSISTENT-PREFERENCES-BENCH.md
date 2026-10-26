@@ -1,6 +1,6 @@
 # PULSE-0.3C — Persistent skin and last K-page
 
-**Status:** firmware integration candidate; physical Pico power-cycle test not yet accepted.
+**Status: operator physical FAIL on 2026-10-26 for original 0.3C image.** Neither skin nor K page restored after power cycle. User also reported anomalous top/left LCD border pixels. Updated source adds read-only flash diagnostics and a reversible LCD-address calibration lab; these fixes still require a new hardware bench and MUST NOT be called physically accepted.
 
 The Chronoscope must recover only the **applied skin** (Classic / Phosphor / Chrome 99 / Italia) and the **last K1..K4 page** after a complete power-off. Focus, zoom, pan, menu previews, demo ticks, IMU samples and calibration are never persisted. Color calibration remains operator-approved NORM/BGR mode 4 (MADCTL 0x68, INVOFF 0x20) on every boot.
 
@@ -47,3 +47,66 @@ Check CI release image sections and UF2 address range before flashing; if the ch
 6. No physical destructive power-cut test is requested. Unit-test simulation covers torn records and sector rollover; a physically clean power cycle establishes basic persistence.
 
 **Not yet accepted:** physical persistence across real unplug/replug, IMU live retest, flash failure handling on a physical Pico. All are independent gates. This is a diagnostic HMI, not a robot motion controller or safety device.
+
+## 0.3C.1 investigation — after physical FAIL
+
+**Do not blindly flash again.** First inspect the on-device 8KiB region of the
+previously flashed 0.3C image, preferably through the RP2040 ROM USB BOOTSEL,
+without any write. This is optional if picotool is unavailable.
+
+1. Enter BOOTSEL on the **Pico W only**, with motors disconnected.
+2. Confirm a single `2e8a:0003 Raspberry Pi RP2 Boot`.
+3. With Raspberry Pi `picotool` available:
+
+```bash
+picotool info
+picotool save -r 0x101FE000 0x10200000 /tmp/pulse-prefs-before.bin -t bin
+python3 scripts/inspect-pulse-preferences-dump.py /tmp/pulse-prefs-before.bin
+```
+
+The decoder is strictly read-only and distinguishes all-FF (no write), valid
+records (write happened, restoration failed or wrong image/flash map), and
+invalid records (partial/bad programming). Keep the dump private unless
+specifically needed for debugging; only the summary is normally necessary.
+
+### Diagnostic firmware candidate (source only until CI/UF2 PASS)
+
+The updated firmware contains a read-only diagnostic overlay accessed with
+**K3+K4 long hold (1.2s)**. While holding this chord no robot commands are
+ever emitted. The first screen reports:
+
+- **STATE**: EMPTY, RESTORED, PENDING, WAIT IDLE, WAIT USB DTR, WAIT RATE,
+  SAVED, BAD FLASH ID, JEDEC ERROR, READ ERROR or WRITE ERROR.
+- **JEDEC**: 24-bit flash chip identification returned by the Embassy RP flash HAL.
+- **SEQ**: last confirmed journal record sequence (0 if empty).
+- **STORED**: last fully verified skin and K page.
+- **PEND**: pending unsaved choices (if any).
+- **USB DTR**: active clients prevent writes by design.
+- **ERR**: 1 bounds, 2 alignment, 3 wrong CPU core, 4 hardware error,
+  5 verify readback, 6 JEDEC read, 7 missing journal.
+
+Firmware **fails closed** before journal access if JEDEC capacity byte is
+not `0x15` (standard 2MiB RP2040 Pico W); this is diagnostic evidence
+and may require investigating a different flash chip. Do NOT defeat the
+capacity check without physical verification.
+
+### LCD geometry diagnostic
+
+Within the K3+K4 overlay, press joystick **CLICK** to open `LCD ALIGN`.
+This displays a true 1-pixel perimeter, distinct corner marks, and live
+address offsets (starting from X=2, Y=3, both provisional):
+
+- LEFT / RIGHT adjust **X** from 0 to 4.
+- UP / DOWN adjust **Y** from 0 to 4.
+- CLICK applies this LCD shift **in RAM until reboot**.
+- Hold K3+K4 to cancel without applying.
+
+This changes ONLY ST7735S CASET/RASET address-window offsets; the physically
+verified NORM/BGR color profile, electrical GPIO mapping and USB CDC
+protocols remain unchanged. Report the X,Y combination that eliminates the
+top/left artifacts **while keeping four corners visible**. Those values can
+then replace the provisional defaults after acceptance, rather than guessing.
+
+The diagnostic overlay is not a substitute for a raw flash read: if it
+reports a flash error, stop trying to save and retain the existing good
+0.3B/0.3C baseline until corrected.
