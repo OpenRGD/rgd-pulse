@@ -19,9 +19,9 @@ use embassy_rp::{
     peripherals::FLASH,
 };
 use pulse_ui::{
-    preferences::Preferences,
+    preferences::{Preferences, RECORD_LEN},
     preferences_journal::{
-        FlashStorage, Journal, FLASH_BYTES, RECORD_LEN, SAVE_IDLE_MS,
+        FlashStorage, Journal, FLASH_BYTES, SAVE_IDLE_MS,
         SAVE_MIN_INTERVAL_MS, SECTOR_BYTES,
     },
 };
@@ -54,7 +54,7 @@ impl FlashStorage for PreferencesStore<'_> {
 }
 
 impl<'d> PreferencesStore<'d> {
-    pub fn new(flash: impl embassy_rp::Peripheral<P = FLASH> + 'd) -> Self {
+    pub fn new(flash: FLASH) -> Self {
         let mut store = Self {
             flash: Flash::new_blocking(flash),
             journal: None,
@@ -82,7 +82,7 @@ impl<'d> PreferencesStore<'d> {
         if self.writes_disabled {
             return;
         }
-        if self.journal.map(|j| j.preferences()) == Some(choices) {
+        if self.restored() == choices {
             self.pending = None;
             return;
         }
