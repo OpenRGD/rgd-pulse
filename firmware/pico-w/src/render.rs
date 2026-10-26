@@ -814,7 +814,7 @@ pub fn render_skin_settings(f: &mut Frame<'_>, settings: &Settings) {
 
     small(f, "PREV < > NEXT", 8, 84, WHITE);
     small(f, "CLICK: APPLY", 8, 96, GREEN);
-    small(f, "RAM ONLY / NO FLASH", 8, 105, AMBER);
+    small(f, "SAVE AUTO / 3S IDLE", 8, 105, AMBER);
     fill(f, 0, 114, 128, 14, PANEL);
     small(f, "K2+K3 HOLD: CANCEL", 7, 117, MUTED);
 }
