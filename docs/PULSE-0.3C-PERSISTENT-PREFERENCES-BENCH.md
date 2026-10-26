@@ -48,6 +48,30 @@ Check CI release image sections and UF2 address range before flashing; if the ch
 
 **Not yet accepted:** physical persistence across real unplug/replug, IMU live retest, flash failure handling on a physical Pico. All are independent gates. This is a diagnostic HMI, not a robot motion controller or safety device.
 
+## Physical flash dump: 2026-10-26 (read-only picotool evidence)
+
+The operator installed picotool, entered RP2040 ROM BOOTSEL, and read precisely
+8192 bytes [0x101FE000,0x10200000). The offline journal decoder reported
+**three valid records, 29 erased pages, zero invalid records**:
+
+- sector0 slot0: seq1, Classic + K3 IMU
+- sector0 slot1: seq2, Classic + K1 SOMATIC
+- sector0 slot2: seq3, Classic + K3 IMU
+
+This proves on-device NOR writes to the expected 8KiB region survived ROM
+BOOTSEL reboot and CRC decoding. It does **not** prove the application reads
+or restores the last record correctly, nor does it show any non-Classic skin
+was committed. **Do not erase these records before observing a normal app
+boot**. The next nondestructive test is to unplug from BOOTSEL, reboot the
+Pico normally without touching any keys, and check whether it starts on
+K3 IMU (the latest stored page) or K1 SOMATIC. Then apply Italia with a
+confirmed center CLICK (not just preview), remain on K3, wait >=20s with
+no DTR client, and take a SECOND picotool read-only snapshot to determine
+whether a new Italia record was appended. Only after this evidence is
+collected should the 0.3C.1 diagnostic firmware be flashed. The UI
+previously showed an obsolete RAM-only label from 0.2D; the candidate
+diagnostic branch corrects that label to describe the new delayed save.
+
 ## 0.3C.1 investigation — after physical FAIL
 
 **Do not blindly flash again.** First inspect the on-device 8KiB region of the
