@@ -139,11 +139,7 @@ mod tests {
 
     #[test]
     fn torn_unknown_and_invalid_records_fail_closed() {
-        let mut record = Record::new(
-            22,
-            Preferences::new(SkinId::Italia, Page::System),
-        )
-        .encode();
+        let mut record = Record::new(22, Preferences::new(SkinId::Italia, Page::System)).encode();
         assert!(Record::decode(&[0xff; RECORD_LEN]).is_none());
         record[9] ^= 0x40; // torn write / bit-flip
         assert!(Record::decode(&record).is_none());
@@ -176,6 +172,11 @@ mod tests {
         assert_eq!(p.skin, SkinId::Classic);
         assert_eq!(p.page, Page::Somatic);
         // Color Lab is deliberately not included in this schema.
-        assert_eq!(Record::decode(&Record::new(1, p).encode()).unwrap().preferences, p);
+        assert_eq!(
+            Record::decode(&Record::new(1, p).encode())
+                .unwrap()
+                .preferences,
+            p
+        );
     }
 }
