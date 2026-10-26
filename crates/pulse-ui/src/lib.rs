@@ -8,6 +8,7 @@
 pub mod color_lab;
 pub mod imu;
 pub mod input_lab;
+pub mod preferences;
 pub mod input_repeat;
 pub mod settings;
 pub mod skins;
