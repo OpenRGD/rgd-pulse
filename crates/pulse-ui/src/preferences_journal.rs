@@ -207,7 +207,11 @@ mod tests {
     impl MemoryFlash {
         fn at(offset: u32, len: usize) -> Result<usize, SimError> {
             let idx = offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)? as usize;
-            if idx.checked_add(len).map(|end| end <= JOURNAL_BYTES as usize) != Some(true) {
+            if idx
+                .checked_add(len)
+                .map(|end| end <= JOURNAL_BYTES as usize)
+                != Some(true)
+            {
                 return Err(SimError::Bounds);
             }
             Ok(idx)
@@ -217,32 +221,46 @@ mod tests {
     impl FlashStorage for MemoryFlash {
         type Error = SimError;
 
-        fn read_page(&mut self, offset: u32, out: &mut [u8; RECORD_LEN]) -> Result<(), Self::Error> {
-            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % RECORD_LEN as u32 != 0 { return Err(SimError::Bounds); }
+        fn read_page(
+            &mut self,
+            offset: u32,
+            out: &mut [u8; RECORD_LEN],
+        ) -> Result<(), Self::Error> {
+            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % RECORD_LEN as u32 != 0 {
+                return Err(SimError::Bounds);
+            }
             let i = Self::at(offset, RECORD_LEN)?;
             out.copy_from_slice(&self.bytes[i..i + RECORD_LEN]);
             Ok(())
         }
 
         fn erase_sector(&mut self, offset: u32) -> Result<(), Self::Error> {
-            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % SECTOR_BYTES != 0 { return Err(SimError::Bounds); }
+            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % SECTOR_BYTES != 0 {
+                return Err(SimError::Bounds);
+            }
             self.erase_count += 1;
             let i = Self::at(offset, SECTOR_BYTES as usize)?;
             let until = self.erase_cutoff.take().unwrap_or(SECTOR_BYTES as usize);
             self.bytes[i..i + until].fill(0xff);
-            if until != SECTOR_BYTES as usize { return Err(SimError::PowerCut); }
+            if until != SECTOR_BYTES as usize {
+                return Err(SimError::PowerCut);
+            }
             Ok(())
         }
 
         fn write_page(&mut self, offset: u32, page: &[u8; RECORD_LEN]) -> Result<(), Self::Error> {
-            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % RECORD_LEN as u32 != 0 { return Err(SimError::Bounds); }
+            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % RECORD_LEN as u32 != 0 {
+                return Err(SimError::Bounds);
+            }
             self.write_count += 1;
             let i = Self::at(offset, RECORD_LEN)?;
             let until = self.write_cutoff.take().unwrap_or(RECORD_LEN);
             for (slot, value) in self.bytes[i..i + until].iter_mut().zip(page) {
                 *slot &= *value; // NOR programming can turn 1->0 only
             }
-            if until != RECORD_LEN { return Err(SimError::PowerCut); }
+            if until != RECORD_LEN {
+                return Err(SimError::PowerCut);
+            }
             Ok(())
         }
     }
