@@ -6,6 +6,7 @@
 //! Read-only observer, never actuation, never a safety controller.
 
 mod lcd;
+mod preferences_store;
 mod render;
 
 use embassy_executor::Spawner;
@@ -32,6 +33,7 @@ use pulse_protocol::{
 };
 use pulse_ui::{
     color_lab::{ColorLab, VALIDATED_BOOT_MODE},
+    preferences::Preferences,
     imu::{FrameQuality, ImuSample, ImuStatus, ImuView, Origin},
     input_lab::InputLab,
     input_repeat::InputRepeater,
@@ -40,6 +42,7 @@ use pulse_ui::{
     skins::SkinId,
     UiState,
 };
+use preferences_store::PreferencesStore;
 use render::{Frame as Framebuffer, RenderData, UsbState, PIXELS};
 use static_cell::StaticCell;
 
@@ -133,9 +136,9 @@ async fn main(spawner: Spawner) {
     lcd.flush_rgb565(image.data);
     Timer::after_millis(350).await;
 
-    let mut ui = UiState::new(); // K1 SOMATIC default
+    // Read the two reserved flash sectors before selecting the initial K page.\n    // Corrupt/unknown records fall back to Classic + K1. This is read-only.\n    let mut preference_store = PreferencesStore::new(p.FLASH);\n    let restored_choices = preference_store.restored();\n    let mut ui = UiState::new();\n    ui.page = restored_choices.page; // K1 default or last persisted K page
     let mut input_lab = InputLab::new(); // K1+K4 >=1.2s: raw GPIO diagnostics
-    let mut settings = Settings::new(); // K2+K3 >=1.2s: Winamp-style skin picker
+    let mut settings = Settings::new(); // K2+K3 >=1.2s: Winamp-style skin picker\n    settings.applied = restored_choices.skin;\n    settings.preview = restored_choices.skin;
     let mut color_lab = ColorLab::new(); // K1+K2 >=1.2s: LCD RGB/BGR x INV calibration
                                          // Track the exact mode that lcd.init() applied before the splash.
     let mut lcd_color_mode = VALIDATED_BOOT_MODE;
@@ -412,9 +415,7 @@ async fn main(spawner: Spawner) {
                 }
             }
         }
-        previous_mask = mask;
-
-        if needs_draw {
+        previous_mask = mask;\n\n        // Persist only APPLIED skin and selected K-page, never menu previews,\n        // focus/zoom, synthetic telemetry or any sensor observation. A stable\n        // choice is committed at most once per debounce window and only\n        // when no USB CDC/DTR session is active.\n        preference_store.observe(Preferences::new(settings.applied, ui.page), now_ms);\n        preference_store.poll(now_ms, cdc.dtr());\n\n        if needs_draw {
             // LCD command 0x36 (MADCTL R/B order) and 0x20/0x21
             // (INVOFF/INVON) are applied only when the preview changes.
             // No flash writes, no CPU reset and no change to orientation.
