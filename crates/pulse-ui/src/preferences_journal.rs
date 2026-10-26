@@ -218,14 +218,14 @@ mod tests {
         type Error = SimError;
 
         fn read_page(&mut self, offset: u32, out: &mut [u8; RECORD_LEN]) -> Result<(), Self::Error> {
-            if (offset - BASE_OFFSET) % RECORD_LEN as u32 != 0 { return Err(SimError::Bounds); }
+            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % RECORD_LEN as u32 != 0 { return Err(SimError::Bounds); }
             let i = Self::at(offset, RECORD_LEN)?;
             out.copy_from_slice(&self.bytes[i..i + RECORD_LEN]);
             Ok(())
         }
 
         fn erase_sector(&mut self, offset: u32) -> Result<(), Self::Error> {
-            if (offset - BASE_OFFSET) % SECTOR_BYTES != 0 { return Err(SimError::Bounds); }
+            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % SECTOR_BYTES != 0 { return Err(SimError::Bounds); }
             self.erase_count += 1;
             let i = Self::at(offset, SECTOR_BYTES as usize)?;
             let until = self.erase_cutoff.take().unwrap_or(SECTOR_BYTES as usize);
@@ -235,7 +235,7 @@ mod tests {
         }
 
         fn write_page(&mut self, offset: u32, page: &[u8; RECORD_LEN]) -> Result<(), Self::Error> {
-            if (offset - BASE_OFFSET) % RECORD_LEN as u32 != 0 { return Err(SimError::Bounds); }
+            if (offset.checked_sub(BASE_OFFSET).ok_or(SimError::Bounds)?) % RECORD_LEN as u32 != 0 { return Err(SimError::Bounds); }
             self.write_count += 1;
             let i = Self::at(offset, RECORD_LEN)?;
             let until = self.write_cutoff.take().unwrap_or(RECORD_LEN);
