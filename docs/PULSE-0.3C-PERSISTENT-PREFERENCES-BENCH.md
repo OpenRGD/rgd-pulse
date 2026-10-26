@@ -134,3 +134,17 @@ then replace the provisional defaults after acceptance, rather than guessing.
 The diagnostic overlay is not a substitute for a raw flash read: if it
 reports a flash error, stop trying to save and retain the existing good
 0.3B/0.3C baseline until corrected.
+
+
+## Physical acceptance update — 26 October 2026
+
+**PASS: skin Italia + K3 IMU persisted across complete USB disconnect/reconnect, no BOOTSEL and no buttons pressed.**
+
+ROM picotool read-only snapshots captured in the 8KiB persistence partition:
+- Before manual Italia commit: 3 CRC-valid records, latest seq=3 Classic / K3 IMU.
+- After manually selecting and applying Italia (center CLICK) while on K3: 4 CRC-valid records, latest **seq=4 Italia / K3 IMU**, 28 erased pages and zero invalid entries.
+- Operator then cold-booted normally and explicitly confirmed **Italia + K3** on the first visible dashboard.
+
+Together these establish end-to-end embedded persistence of both requested fields on the physically connected standard Pico W: UI action -> journal write -> valid flash readback -> ordinary cold boot -> restored UI. These observations refer to the original 0.3C image that was in use at the time; the subsequent K3+K4 diagnostic + LCD ALIGN additions remain **separate, not yet physically commissioned**.
+
+**Remaining independent gates:** LCD top/left anomalous pixel border (offsets provisional), host 20/20 and 100/100 USB CDC ACK after latest firmware flash, and PULSE/IMU-1 live source test when publisher available. Avoid touching the stored journal via mass erase or unbounded firmware tools.
