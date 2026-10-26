@@ -90,6 +90,11 @@ impl Journal {
         self.current.is_some()
     }
 
+    /// Latest confirmed commit sequence, or zero if storage is empty.
+    pub fn sequence(&self) -> u32 {
+        self.current.map(|(record, _)| record.sequence).unwrap_or(0)
+    }
+
     fn first_erased_from<F: FlashStorage>(
         storage: &mut F,
         sector: u8,
