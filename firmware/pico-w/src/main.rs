@@ -33,6 +33,7 @@ use pulse_protocol::{
 };
 use pulse_ui::{
     color_lab::{ColorLab, VALIDATED_BOOT_MODE},
+    diagnostics::Diagnostics,
     preferences::Preferences,
     imu::{FrameQuality, ImuSample, ImuStatus, ImuView, Origin},
     input_lab::InputLab,
@@ -147,6 +148,7 @@ async fn main(spawner: Spawner) {
     settings.applied = restored_choices.skin;
     settings.preview = restored_choices.skin;
     let mut color_lab = ColorLab::new(); // K1+K2 >=1.2s: LCD RGB/BGR x INV calibration
+    let mut diagnostics = Diagnostics::new(); // K3+K4 long hold: PREFS / LCD ALIGN
                                          // Track the exact mode that lcd.init() applied before the splash.
     let mut lcd_color_mode = VALIDATED_BOOT_MODE;
     let mut repeater = InputRepeater::new(); // Direction keys only, never CLICK/K1-K4
@@ -349,9 +351,9 @@ async fn main(spawner: Spawner) {
             }
         }
 
-        // Sample the physically accepted GPIO mapping once. Three disjoint,
-        // mutually exclusive *local* hold chords: K1+K4 INPUT, K2+K3 SKINS,
-        // K1+K2 COLOR. A long hold never communicates a robot command.
+        // Sample physically accepted GPIO mapping. Four mutually exclusive
+        // read-only local chords: K1+K4 INPUT, K2+K3 SKINS, K1+K2 COLOR,
+        // K3+K4 PREFS/LCD diagnostics. None can command robot motion.
         let mut mask = 0u16;
         for (index, key) in keys.iter().enumerate() {
             if key.is_low() {
@@ -362,28 +364,35 @@ async fn main(spawner: Spawner) {
         let was_in_lab = input_lab.active;
         let was_in_settings = settings.open;
         let was_in_color = color_lab.open;
+        let was_in_diagnostics = diagnostics.open;
 
         // Disabled overlays see no raw input, which resets chord timers and
         // prevents a held key from arming a second mode on exit.
-        if !settings.open && !color_lab.open {
+        if !settings.open && !color_lab.open && !diagnostics.open {
             needs_draw |= input_lab.observe(mask, now_ms);
         } else {
             needs_draw |= input_lab.observe(0, now_ms);
         }
-        if !input_lab.active && !color_lab.open {
+        if !input_lab.active && !color_lab.open && !diagnostics.open {
             needs_draw |= settings.observe(mask, now_ms, true);
         } else {
             needs_draw |= settings.observe(0, now_ms, false);
         }
-        if !input_lab.active && !settings.open {
+        if !input_lab.active && !settings.open && !diagnostics.open {
             needs_draw |= color_lab.observe(mask, now_ms, true);
         } else {
             needs_draw |= color_lab.observe(0, now_ms, false);
         }
+        if !input_lab.active && !settings.open && !color_lab.open {
+            needs_draw |= diagnostics.observe(mask, now_ms, true);
+        } else {
+            needs_draw |= diagnostics.observe(0, now_ms, false);
+        }
 
         let overlay_switched = was_in_lab != input_lab.active
             || was_in_settings != settings.open
-            || was_in_color != color_lab.open;
+            || was_in_color != color_lab.open
+            || was_in_diagnostics != diagnostics.open;
         if overlay_switched {
             repeater.reset();
             needs_draw = true;
@@ -396,8 +405,10 @@ async fn main(spawner: Spawner) {
         } else {
             repeater.poll(mask, now_ms)
         };
-        let chord_blocked =
-            input_lab.chord_held() || settings.chord_held(mask) || color_lab.chord_held(mask);
+        let chord_blocked = input_lab.chord_held()
+            || settings.chord_held(mask)
+            || color_lab.chord_held(mask)
+            || diagnostics.chord_held(mask);
 
         if !input_lab.active && !was_in_lab && !overlay_switched && !chord_blocked {
             let events = pressed | repeated;
@@ -410,7 +421,9 @@ async fn main(spawner: Spawner) {
                     if debounce_ok {
                         last_key_ms[index] = now_ms.max(1);
                         if let Some(action) = landscape_action(index) {
-                            if color_lab.open {
+                            if diagnostics.open {
+                                needs_draw |= diagnostics.handle(action);
+                            } else if color_lab.open {
                                 needs_draw |= color_lab.handle(action);
                             } else if settings.open {
                                 needs_draw |= settings.handle(action);
@@ -428,10 +441,19 @@ async fn main(spawner: Spawner) {
         // focus/zoom, synthetic telemetry or any sensor observation. A stable
         // choice is committed at most once per debounce window and only
         // when no USB CDC/DTR session is active.
+        let previous_preferences = preference_store.snapshot();
         preference_store.observe(Preferences::new(settings.applied, ui.page), now_ms);
         preference_store.poll(now_ms, cdc.dtr());
+        let current_preferences = preference_store.snapshot();
+        if diagnostics.open && current_preferences != previous_preferences {
+            needs_draw = true;
+        }
 
         if needs_draw {
+            // This only adjusts the ST7735S 2A/2B RAM window. It never
+            // changes the accepted MADCTL/INVOFF colors or writes flash.
+            let (x, y) = diagnostics.lcd_offsets();
+            lcd.set_offsets(x, y);
             // LCD command 0x36 (MADCTL R/B order) and 0x20/0x21
             // (INVOFF/INVON) are applied only when the preview changes.
             // No flash writes, no CPU reset and no change to orientation.
@@ -441,7 +463,15 @@ async fn main(spawner: Spawner) {
                 lcd_color_mode = desired_color_mode;
             }
 
-            if color_lab.open {
+            if diagnostics.open {
+                image.skin = SkinId::Classic;
+                render::render_diagnostics(
+                    &mut image,
+                    &diagnostics,
+                    &current_preferences,
+                    cdc.dtr(),
+                );
+            } else if color_lab.open {
                 image.skin = SkinId::Classic;
                 render::render_color_lab(&mut image, &color_lab);
             } else if input_lab.active {
