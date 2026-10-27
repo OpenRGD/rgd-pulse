@@ -197,3 +197,25 @@ No second reader of WIT/CH340 sensor serial may be started in Pulse.
 
 PR remains stacked/draft until the dependent 0.3B integration gate and
 review/merge order are addressed.
+
+## Physical IMU visualization — 27 October 2026
+
+**Operator-reported functional PASS:** After the final 0.3C display,
+preferences and synthetic USB acceptance, the operator separately
+started the existing Paky-01 physical IMU publisher to the installed
+Console and launched the `pulse-bridge imu-live` Rust subscriber on
+the Pico USB CDC endpoint. The operator confirms the real K3 IMU
+visualization works on the actual Chronoscope.
+
+This closes the first real-data **forwarding and display** milestone,
+without changing the publisher's exclusive WIT serial ownership,
+Console contract, PULSE/IMU-1 provenance restrictions or Pico firmware.
+
+Still unverified in a captured, independently reproducible trace:
+`Probe/ACK` log lines and numeric forward/reject counters, plus
+the deliberate `RAW -> STALE` transition while the USB bridge is still
+connected (publisher stops, no motor power). Console GET should become
+`null` after its own 3-second freshness window.
+
+The physical success refers to **uncalibrated sensor-frame observations**,
+not a certified robot/world orientation or safety/balance decision.
