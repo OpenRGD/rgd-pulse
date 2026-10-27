@@ -205,3 +205,52 @@ observation only, not torso pose, balance/safety state or a motor command.
 The publisher remains the sole IMU/CH340 serial reader. No additional
 service installation, hidden auto-start, or robot actuation occurred in
 this Pulse acceptance report.
+
+
+## 27 October 2026 — physical handshake and stale-transition evidence
+
+The operator supplied the following **actual on-device end-to-end host output**,
+rather than a hypothetical protocol example:
+
+```text
+PULSE/1 HELLO OK
+PULSE/IMU-1 PROBE/ACK OK (Pico supports typed sensor frames)
+Console v0.5 WS connected (same-host, read-only)
+IMU #1 seq=181 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=96ms YAW_UNCAL
+IMU #2 seq=182 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=4ms YAW_UNCAL
+IMU #3 seq=184 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=4ms YAW_UNCAL
+IMU #10 seq=199 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=1ms YAW_UNCAL
+IMU #20 seq=219 SENSOR XYZ roll=-4.93 pitch=-8.44 yaw*=-160.60 age=4ms YAW_UNCAL
+```
+
+**Physical PASS:** Both negotiated USB protocol handshakes, local Console
+WebSocket read-only subscription, forwarded numbered samples, and operator-
+observed K3 real IMU values.
+
+**Physical PASS — publisher cessation:** The operator explicitly stopped
+the IMU publisher while watching K3. K3 changed to **STALE** and rendered
+the last sensor readings greyed out, rather than continuing to claim that
+measurements were fresh. After a further interval the visual returned to
+the preceding baseline/no-feed screen. This proves the stale indication
+worked; it does **not** measure the precise number of milliseconds.
+
+**Source-level explanation of the later fallback:** Embedded main.rs
+clears `ImuView` when Pico USB CDC DTR drops, then K3's renderer changes to
+`SENSOR XYZ / NO FEED`, with unavailable numerical fields and an explicitly
+DEMO chart. Stopping the publisher alone normally leaves K3 in the stale
+state until the bridge exits/closes CDC; `UiState.page` itself is never
+automatically changed by the source-disconnect handler. Do not assert
+that an automatic navigation between K1/K2/K3/K4 occurred.
+
+**Limits:** No attached end-of-run `forwarded/rejected/non_imu` summary,
+no independently measured real rate or total latency, no captured
+Console GET aging to `null`, and no verified sensor-frame to robot-body
+extrinsic transformation. The logged `age` fields are source-age
+estimates at forwarding, not calibrated latency benchmarks.
+`YAW_UNCAL` remains explicitly uncalibrated. This acceptance provides
+**observation-only** data, never actuator or balance authority.
+
+**Review gate status:** physical K3 feed and publisher-stop STALE PASS;
+console TTL/null and optional per-session summary remain future regressions.
+The physically tested RP2040 image was built from stacked PULSE-0.3C,
+which incorporates this PULSE-0.3B adapter.
