@@ -7,21 +7,24 @@ use embassy_rp::{
     spi::{Blocking, Spi},
 };
 use embassy_time::Timer;
-use pulse_ui::color_lab::{ColorMode, VALIDATED_BOOT_MODE};
+use pulse_ui::{
+    color_lab::{ColorMode, VALIDATED_BOOT_MODE},
+    diagnostics::{DEFAULT_X, DEFAULT_Y},
+};
 
 const LCD_W: u16 = 128;
 const LCD_H: u16 = 128;
 
-// Panel RAM offsets measured on original portrait fixture are *provisional*
-// after rotation. Verify the edges, RGB/BGR ordering and text orientation
-// on the physical joystick-left / keys-right unit.
-const X_OFFSET: u16 = 2;
-const Y_OFFSET: u16 = 3;
+// ST7735S landscape origin physically accepted with joystick LEFT and K1-K4
+// RIGHT: X=1, Y=2 (operator, 2026-10-27). These constants are shared with
+// LCD ALIGN and apply before the startup splash.
+const X_OFFSET: u16 = DEFAULT_X as u16;
+const Y_OFFSET: u16 = DEFAULT_Y as u16;
 // Operator 2026-10-24: 0xA0 (MY|MV) produced an upside-down UI while
 // joystick was at left and K1–K4 at right. The opposite landscape
 // orientation 0x60 (MX|MV) flips the displayed image by 180 degrees,
 // without changing the page controls or the framebuffer coordinates.
-// Verify on the physical ST7735S; X/Y RAM offsets remain provisional.
+// The physical LCD origin is now fixed from operator-accepted LCD ALIGN.
 // Operator-verified 2026-10-24: mode 4 (MADCTL=0x68, INVOFF=0x20)
 // displays correct GREEN / WHITE / RED, without changing MX|MV.
 // Startup and any reboot now select that mode. The on-device Color Lab
@@ -33,6 +36,8 @@ pub struct Lcd<'a> {
     dc: Output<'a>,
     reset: Output<'a>,
     bl: Output<'a>,
+    x_offset: u16,
+    y_offset: u16,
 }
 
 impl<'a> Lcd<'a> {
@@ -49,6 +54,8 @@ impl<'a> Lcd<'a> {
             dc,
             reset,
             bl,
+            x_offset: X_OFFSET,
+            y_offset: Y_OFFSET,
         }
     }
 
@@ -109,9 +116,17 @@ impl<'a> Lcd<'a> {
         self.cmd(mode.inversion_command()); // INVOFF=0x20 / INVON=0x21
     }
 
+    /// Local geometry lab: view-only address shift, no flash writes.
+    /// Physical 128x128 window stays inside 132x132 controller RAM at 0..4.
+    /// Calibrated default remains 2,3 until operator visually validates it.
+    pub fn set_offsets(&mut self, x: u16, y: u16) {
+        self.x_offset = x.min(4);
+        self.y_offset = y.min(4);
+    }
+
     fn window(&mut self, x0: u16, y0: u16, x1: u16, y1: u16) {
-        let (x0, x1) = (x0 + X_OFFSET, x1 + X_OFFSET);
-        let (y0, y1) = (y0 + Y_OFFSET, y1 + Y_OFFSET);
+        let (x0, x1) = (x0 + self.x_offset, x1 + self.x_offset);
+        let (y0, y1) = (y0 + self.y_offset, y1 + self.y_offset);
         self.cmd(0x2A);
         self.data(&[(x0 >> 8) as u8, x0 as u8, (x1 >> 8) as u8, x1 as u8]);
         self.cmd(0x2B);

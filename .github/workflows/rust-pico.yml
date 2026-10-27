@@ -40,5 +40,28 @@ jobs:
           assert boot_address == 0x10000000, hex(boot_address)
           assert vectors_address == 0x10000100, hex(vectors_address)
           assert vectors_size > 0, "Empty Cortex-M vector table"
+          # Every section loaded into XIP flash must stop below the
+          # 8KiB dual-sector persistence partition (0x101fe000).
+          prefs_begin = 0x101fe000
+          flash_begin = 0x10000000
+          flash_end = 0x10200000
+          checked = 0
+          for line in lines:
+              parts = line.split()
+              if len(parts) < 5 or not parts[0].isdigit():
+                  continue
+              try:
+                  size = int(parts[2], 16)
+                  lma = int(parts[4], 16)
+              except ValueError:
+                  continue
+              if flash_begin <= lma < flash_end and size:
+                  assert lma + size <= prefs_begin, (
+                      f"ELF section {parts[1]} flash LMA 0x{lma:x}+0x{size:x} "
+                      f"overlaps protected preferences at 0x{prefs_begin:x}"
+                  )
+                  checked += 1
+          assert checked >= 2, "No flash-load sections were checked"
+          print(f"Persistence partition safe: {checked} flash-load sections end before 0x{prefs_begin:x}")
           print("RP2040 boot layout validated: BOOT2 256 bytes @ 0x10000000; vectors @ 0x10000100")
           PY
