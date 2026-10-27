@@ -9,8 +9,10 @@ use crate::Action;
 
 pub const DIAGNOSTIC_CHORD: u16 = (1 << 2) | (1 << 3);
 pub const HOLD_MS: u64 = 1_200;
-pub const DEFAULT_X: u8 = 2;
-pub const DEFAULT_Y: u8 = 3;
+/// Operator-verified ST7735S landscape X origin, 27 Oct 2026.
+pub const DEFAULT_X: u8 = 1;
+/// Operator-verified ST7735S landscape Y origin, 27 Oct 2026.
+pub const DEFAULT_Y: u8 = 2;
 const LIMIT: u8 = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -156,14 +158,14 @@ mod tests {
         lab.observe(DIAGNOSTIC_CHORD, 0, true);
         lab.observe(DIAGNOSTIC_CHORD, 1200, true);
         lab.observe(0, 1201, true);
-        assert_eq!(lab.lcd_offsets(), (2, 3));
+        assert_eq!(lab.lcd_offsets(), (1, 2));
         assert!(lab.handle(Action::Click));
         assert_eq!(lab.screen, Screen::Geometry);
         lab.handle(Action::Left);
         lab.handle(Action::Up);
-        assert_eq!(lab.lcd_offsets(), (1, 2));
+        assert_eq!(lab.lcd_offsets(), (0, 1));
         lab.cancel();
-        assert_eq!(lab.lcd_offsets(), (2, 3));
+        assert_eq!(lab.lcd_offsets(), (1, 2));
     }
 
     #[test]
@@ -179,6 +181,6 @@ mod tests {
         lab.handle(Action::Click);
         assert!(!lab.open);
         assert_eq!(lab.lcd_offsets(), (4, 4));
-        assert_eq!(Diagnostics::new().lcd_offsets(), (2, 3));
+        assert_eq!(Diagnostics::new().lcd_offsets(), (1, 2));
     }
 }
