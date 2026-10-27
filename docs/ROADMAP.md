@@ -11,7 +11,8 @@
 | PULSE-0.2C | Raw GPIO Input Lab and physical mapping | **PASS** on 2026-10-24: five operator joystick directions, four K pages, Chronon detail, chart zoom, synthetic CDC 20/20 ACK |
 | PULSE-0.2D | Hold-to-repeat + skin engine | **Software candidate**: 440 ms initial hold, stepped acceleration, input-event feedback, four selectable skins via K2+K3 menu; physical acceptance pending |
 | PULSE-0.2E (proposed) | Persistent per-device preferences + richer skin packaging | Versioned skin IDs and safe host preference sync, no arbitrary MCU code or unreviewed flash writes |
-| PULSE-0.3C (in progress) | Durable Chronoscope preferences (skin + last K page), two-sector 8KiB CRC journal | host tests + Pico firmware CI + UF2 partition check, then physical cold-boot restoration + USB regressions; not accepted until physical PASS |\n| PULSE-0.2F (proposed) | Real telemetry source adapters | Approved read-only Somatic, Paky-01 IMU fan-out, source-linked Chronons; no invented sensor readings |
+| PULSE-0.3C | Pico skin/last-K-page persistence (2×4KiB CRC flash journal), on-device PREFS/LCD diagnostics, default X=1 Y=2 | **Physical PASS 2026-10-27**: Italia+K3 restored; LCD/colours clean; 100/100 synthetic USB ACK with 0 unexpected. IMU source integration is a separate PULSE-0.3B acceptance. |
+| PULSE-0.2F (proposed) | Real telemetry source adapters | Approved read-only Somatic, Paky-01 IMU fan-out, source-linked Chronons; no invented sensor readings |
 | PULSE-0.3 | Console discovery and configuration | Explicit compatibility contract and staging tests |
 
 ## Skin engine design gate (2026-10-24)
