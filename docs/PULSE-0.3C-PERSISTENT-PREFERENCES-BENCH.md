@@ -148,3 +148,25 @@ ROM picotool read-only snapshots captured in the 8KiB persistence partition:
 Together these establish end-to-end embedded persistence of both requested fields on the physically connected standard Pico W: UI action -> journal write -> valid flash readback -> ordinary cold boot -> restored UI. These observations refer to the original 0.3C image that was in use at the time; the subsequent K3+K4 diagnostic + LCD ALIGN additions remain **separate, not yet physically commissioned**.
 
 **Remaining independent gates:** LCD top/left anomalous pixel border (offsets provisional), host 20/20 and 100/100 USB CDC ACK after latest firmware flash, and PULSE/IMU-1 live source test when publisher available. Avoid touching the stored journal via mass erase or unbounded firmware tools.
+
+
+## LCD ALIGN physical acceptance — 27 October 2026
+
+Operator tested the `K3+K4 -> LCD ALIGN` diagnostic firmware on the actual
+assembled Pico W + Seengreat ST7735S and reports that **moving alignment
+by 1 pixel eliminated the stray top/left border pixels**. Overall visible
+UI is correct again. This confirms the reversible on-device geometry lab
+can correct the observed fault without changing accepted colors.
+
+**The precise final X/Y offset pair was not reported**. Source defaults remain
+X=2, Y=3 and the tested correction is RAM-only; therefore a clean power
+cycle may revert the alignment until the exact operator-approved
+coordinates are incorporated into the compiled defaults. Do NOT guess
+which axis was moved or mark permanent LCD calibration COMPLETE.
+
+To finish: read the successful X and Y values from LCD ALIGN, update
+`crates/pulse-ui/src/diagnostics.rs` `DEFAULT_X` and `DEFAULT_Y`, keep
+`MADCTL=0x68 / INVOFF=0x20` unchanged, then rebuild, verify UF2 protected
+flash range and retest a cold boot and 20/20 + 100/100 PULSE/1 ACK.
+
+Status: **visual alignment PASS in RAM; persistent startup geometry PENDING**.
