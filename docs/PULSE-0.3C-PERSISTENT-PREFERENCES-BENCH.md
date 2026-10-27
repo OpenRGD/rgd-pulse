@@ -219,3 +219,40 @@ connected (publisher stops, no motor power). Console GET should become
 
 The physical success refers to **uncalibrated sensor-frame observations**,
 not a certified robot/world orientation or safety/balance decision.
+
+
+## 27 October 2026 — live IMU negotiated and STALE failover verified
+
+The operator provided physical serial terminal evidence:
+
+```text
+PULSE/1 HELLO OK
+PULSE/IMU-1 PROBE/ACK OK (Pico supports typed sensor frames)
+Console v0.5 WS connected (same-host, read-only)
+IMU #1 seq=181 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=96ms YAW_UNCAL
+IMU #2 seq=182 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=4ms YAW_UNCAL
+IMU #3 seq=184 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=4ms YAW_UNCAL
+IMU #10 seq=199 SENSOR XYZ roll=-4.93 pitch=-8.45 yaw*=-160.60 age=1ms YAW_UNCAL
+IMU #20 seq=219 SENSOR XYZ roll=-4.93 pitch=-8.44 yaw*=-160.60 age=4ms YAW_UNCAL
+```
+
+Observed on the physically installed PULSE-0.3C Pico W:
+- **PASS:** K3 displays accepted live **sensor frame** IMU readings.
+- **PASS:** stopping the sole WIT publisher causes K3 **STALE**, dims
+  previously received numerical values, and does not claim new samples.
+- **PASS:** after some further time the view reverts to its baseline/no-feed
+  display, consistent with the USB bridge ending and firmware clearing its
+  session sample when DTR is closed. The source does not automatically select
+  another K page; this was not independently instrumented.
+- **PASS:** verified PULSE/1 & PULSE/IMU-1 negotiated handshakes and local WS.
+
+Not measured or claimed: exact stale-delay time, real sensor sample rate,
+throughput/loss rates, host end-of-run forwarded/rejected counts, Console
+3-second latest GET becoming null, system time sync, robot-body orientation,
+yaw heading accuracy, or any motor safety. The published PULSE/1 100/100
+ACK check remains a *separate synthetic USB regression*.
+
+**Hardware acceptance:** display/colors X=1/Y=2, persisted Italia/K3,
+PULSE/1 synthetic USB, physical PULSE/IMU-1 K3 feed and
+publisher-stop STALE all operator-verified. Dependency branch review
+and stacked merge order remain separate release-management steps.
