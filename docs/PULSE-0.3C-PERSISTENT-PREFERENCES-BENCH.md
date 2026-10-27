@@ -168,3 +168,32 @@ The accepted pair is now the source default in
 Status: **visual geometry PASS on hardware; permanent compiled default is
 implemented but physical confirmation after next firmware flash is pending**.
 Complete a normal unplug/replug test and CRC ACK regressions after flashing.
+
+
+## 27 October 2026 — final 0.3C LCD and USB bench evidence
+
+**Operator-reported physical PASS on the assembled Paky-01 Chronoscope after
+flashing the build with default X=1 and Y=2.**
+
+- The Seengreat ST7735S panel is visually correct immediately after flash:
+  no stray top or left border pixels, no need for manual LCD ALIGN.
+- Colors remain correct in the validated NORM/BGR profile.
+- Previously saved Italia skin and K3 IMU view restore as expected.
+- Pico's `PULSE/1` USB CDC returned **100/100 CRC-valid DEMO ACK,
+  zero unexpected frames**.
+- The operator's shell completed the full sequential USB regression script;
+  no explicit 20/20 summary line was separately supplied in this report.
+  The script had `set -e` and progressed to `USB REGRESSION COMPLETE`,
+  so the 20-frame stage did not cause it to exit.
+
+**Scope of PASS:** 0.3C preferences + UI + physical display geometry +
+synthetic CDC transport. These synthetic ACKs are *not* real Somatic loop
+measurements, robot safety evidence, or physical IMU telemetry.
+
+**Still pending and owned by 0.3B's source adapter:** the actual
+Console WebSocket -> `pulse-bridge imu-live` -> PULSE/IMU-1 Probe/ACK ->
+Pico K3 RAW/STALE behavior while the managed IMU publisher is active.
+No second reader of WIT/CH340 sensor serial may be started in Pulse.
+
+PR remains stacked/draft until the dependent 0.3B integration gate and
+review/merge order are addressed.
