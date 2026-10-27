@@ -15,16 +15,16 @@ use pulse_ui::{
 const LCD_W: u16 = 128;
 const LCD_H: u16 = 128;
 
-// Panel RAM offsets measured on original portrait fixture are *provisional*
-// after rotation. Verify the edges, RGB/BGR ordering and text orientation
-// on the physical joystick-left / keys-right unit.
+// ST7735S landscape origin physically accepted with joystick LEFT and K1-K4
+// RIGHT: X=1, Y=2 (operator, 2026-10-27). These constants are shared with
+// LCD ALIGN and apply before the startup splash.
 const X_OFFSET: u16 = DEFAULT_X as u16;
 const Y_OFFSET: u16 = DEFAULT_Y as u16;
 // Operator 2026-10-24: 0xA0 (MY|MV) produced an upside-down UI while
 // joystick was at left and K1–K4 at right. The opposite landscape
 // orientation 0x60 (MX|MV) flips the displayed image by 180 degrees,
 // without changing the page controls or the framebuffer coordinates.
-// Verify on the physical ST7735S; X/Y RAM offsets remain provisional.
+// The physical LCD origin is now fixed from operator-accepted LCD ALIGN.
 // Operator-verified 2026-10-24: mode 4 (MADCTL=0x68, INVOFF=0x20)
 // displays correct GREEN / WHITE / RED, without changing MX|MV.
 // Startup and any reboot now select that mode. The on-device Color Lab
