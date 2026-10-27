@@ -158,3 +158,50 @@ Expect `HELLO OK`, `PULSE ACK SUMMARY 20/20` and `100/100`, **0 unexpected frame
 The only **missing information after handoff** is fresh **runtime confirmation of the installed Console** and the end-to-end physical test results. The source schema and read-only endpoints are documented and sufficient to implement the code; there is no need to ask the IMU chat for another endpoint.
 
 **Context note:** OpenRGD Console runtime source is local at `~/openrgd/repos/openrgd-console`; its matching GitHub repository commit was not accessible in the handoff. This implementation uses the handoff's actual v0.5 WS/GET contract and insists on explicit schema validation rather than inventing a Console SHA.
+
+## Physical end-to-end operator result — 27 October 2026
+
+**OPERATOR-REPORTED PASS:** On the actual Paky-01 Ubuntu mini-PC and RP2040
+Chronoscope, the operator ran a bounded IMU publisher to the existing Console,
+then launched `pulse-bridge imu-live` using the independently identified Pico
+USB CDC port. The operator reports that **the live IMU values work correctly
+on K3** following the preceding test instructions.
+
+This constitutes physical user acceptance of the *functional forward path*:
+
+```text
+WIT/JY901 CH340 -> exclusive Python IMU publisher -> Console localhost:8088
+    -> read-only Console WS -> Pulse Bridge Rust
+    -> PULSE/IMU-1 USB CDC -> Pico W K3 real sensor-frame readout
+```
+
+The firmware physically tested was the successor **PULSE-0.3C** build
+(recoverable preferences, fixed LCD X=1/Y=2) based on this 0.3B source
+branch, not necessarily the older standalone 0.3B ELF. The accepted
+color/persistence/display features and synthetic USB 100/100 ACK had
+already passed before the live IMU test.
+
+**Evidence granularity:** This is a direct operator functional report, **not**
+an attached terminal transcript of the actual `PULSE/IMU-1 PROBE/ACK`,
+`forwarded=N`, `rejected=0` counters or sample measurements. Do not
+assert exact live Hz, latency, loss rate, values, or IMU calibration.
+
+### Separate outstanding hardware verification
+
+- [x] Operator observes functional real IMU feed on Chronoscope K3 using
+      the existing Console WS and USB read-only adapter.
+- [x] Prior PULSE/1 100/100 synthetic CRC ACK, zero unexpected frames
+      on the physically flashed 0.3C Chronoscope.
+- [ ] Capture or summarize host `PULSE/IMU-1 PROBE/ACK OK` and forwarding
+      counters for reproducible traceability (no secrets or raw tokens).
+- [ ] Specifically test `RAW -> STALE` by stopping the **sole existing
+      publisher** while the USB bridge remains connected; then expect
+      Console GET to age to `null` after ~3 seconds. When the CDC client
+      closes K3 may instead go to `N/A`; do not call that stale test.
+- [ ] Document bounds/gyro/accel and calibration disclaimers as before.
+
+**Authority is unchanged:** the display is sensor-frame, uncalibrated
+observation only, not torso pose, balance/safety state or a motor command.
+The publisher remains the sole IMU/CH340 serial reader. No additional
+service installation, hidden auto-start, or robot actuation occurred in
+this Pulse acceptance report.
