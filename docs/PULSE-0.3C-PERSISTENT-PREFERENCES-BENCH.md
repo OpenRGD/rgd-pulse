@@ -1,6 +1,6 @@
 # PULSE-0.3C — Persistent skin and last K-page
 
-**Status: operator physical FAIL on 2026-10-26 for original 0.3C image.** Neither skin nor K page restored after power cycle. User also reported anomalous top/left LCD border pixels. Updated source adds read-only flash diagnostics and a reversible LCD-address calibration lab; these fixes still require a new hardware bench and MUST NOT be called physically accepted.
+**Current status:** skin Italia + K3 IMU persisted and restored after a normal power cycle (physical PASS 2026-10-26). The top/left LCD artifact was eliminated physically via LCD ALIGN (2026-10-27); operator validated **X=1, Y=2**. These offsets are now compiled as the defaults in the pending firmware build, but a **fresh cold-boot check after flashing this revision remains necessary**. Earlier failures are documented below.
 
 The Chronoscope must recover only the **applied skin** (Classic / Phosphor / Chrome 99 / Italia) and the **last K1..K4 page** after a complete power-off. Focus, zoom, pan, menu previews, demo ticks, IMU samples and calibration are never persisted. Color calibration remains operator-approved NORM/BGR mode 4 (MADCTL 0x68, INVOFF 0x20) on every boot.
 
@@ -118,7 +118,7 @@ capacity check without physical verification.
 
 Within the K3+K4 overlay, press joystick **CLICK** to open `LCD ALIGN`.
 This displays a true 1-pixel perimeter, distinct corner marks, and live
-address offsets (starting from X=2, Y=3, both provisional):
+address offsets (originally X=2, Y=3; operator-verified X=1, Y=2 now compiled as startup defaults):
 
 - LEFT / RIGHT adjust **X** from 0 to 4.
 - UP / DOWN adjust **Y** from 0 to 4.
@@ -129,7 +129,7 @@ This changes ONLY ST7735S CASET/RASET address-window offsets; the physically
 verified NORM/BGR color profile, electrical GPIO mapping and USB CDC
 protocols remain unchanged. Report the X,Y combination that eliminates the
 top/left artifacts **while keeping four corners visible**. Those values can
-then replace the provisional defaults after acceptance, rather than guessing.
+now confirmed as X=1/Y=2 by operator; verify the permanent compiled default on the next cold boot.
 
 The diagnostic overlay is not a substitute for a raw flash read: if it
 reports a flash error, stop trying to save and retain the existing good
@@ -147,7 +147,7 @@ ROM picotool read-only snapshots captured in the 8KiB persistence partition:
 
 Together these establish end-to-end embedded persistence of both requested fields on the physically connected standard Pico W: UI action -> journal write -> valid flash readback -> ordinary cold boot -> restored UI. These observations refer to the original 0.3C image that was in use at the time; the subsequent K3+K4 diagnostic + LCD ALIGN additions remain **separate, not yet physically commissioned**.
 
-**Remaining independent gates:** LCD top/left anomalous pixel border (offsets provisional), host 20/20 and 100/100 USB CDC ACK after latest firmware flash, and PULSE/IMU-1 live source test when publisher available. Avoid touching the stored journal via mass erase or unbounded firmware tools.
+**Remaining independent gates:** verify the newly compiled X=1/Y=2 startup geometry on physical cold boot, complete 20/20 and 100/100 USB CDC ACK after flashing that firmware, and test PULSE/IMU-1 live source when publisher is available. Avoid touching the stored journal via mass erase or unbounded firmware tools.
 
 
 ## LCD ALIGN physical acceptance — 27 October 2026
@@ -158,15 +158,13 @@ by 1 pixel eliminated the stray top/left border pixels**. Overall visible
 UI is correct again. This confirms the reversible on-device geometry lab
 can correct the observed fault without changing accepted colors.
 
-**The precise final X/Y offset pair was not reported**. Source defaults remain
-X=2, Y=3 and the tested correction is RAM-only; therefore a clean power
-cycle may revert the alignment until the exact operator-approved
-coordinates are incorporated into the compiled defaults. Do NOT guess
-which axis was moved or mark permanent LCD calibration COMPLETE.
+**Follow-up operator measurement (2026-10-27): X=1, Y=2**. The former
+X=2/Y=3 values were incorrect in this physical landscape orientation.
+The accepted pair is now the source default in
+`crates/pulse-ui/src/diagnostics.rs`, which is consumed by
+`firmware/pico-w/src/lcd.rs` from boot, including the splash.
+`MADCTL=0x68 / INVOFF=0x20` and button mappings remain unchanged.
 
-To finish: read the successful X and Y values from LCD ALIGN, update
-`crates/pulse-ui/src/diagnostics.rs` `DEFAULT_X` and `DEFAULT_Y`, keep
-`MADCTL=0x68 / INVOFF=0x20` unchanged, then rebuild, verify UF2 protected
-flash range and retest a cold boot and 20/20 + 100/100 PULSE/1 ACK.
-
-Status: **visual alignment PASS in RAM; persistent startup geometry PENDING**.
+Status: **visual geometry PASS on hardware; permanent compiled default is
+implemented but physical confirmation after next firmware flash is pending**.
+Complete a normal unplug/replug test and CRC ACK regressions after flashing.
