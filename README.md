@@ -83,3 +83,9 @@ cargo run -p pulse-bridge -- imu-live "$PICO_PORT" 30
 PULSE-0.1A protocol, 0.1B LCD/buttons, 0.1C synthetic USB CDC, 0.2A four-page design, 0.2B graphical firmware, 0.2C physically verified input map, **0.2D joystick repeat and skins (candidate)**. **0.3B IMU Console read-only adapter (software candidate)** is the next wave; actual Somatic/Chronon adapters and persistent skin preferences remain separate. Canonical contract promotion and module registration require separate reviews.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) and [hardware/boards/seengreat-pico-144-rev12.md](hardware/boards/seengreat-pico-144-rev12.md).
+
+## PULSE-0.3C: persistent skin and last page (candidate)
+
+The Chronoscope can now **restore the applied skin and last K1–K4 page from an append-only two-sector flash journal** on a standard 2MiB RP2040 Pico W. This is deliberately separate from live IMU telemetry. Records are 256 bytes with CRC; malformed/torn records fall back to the most recent confirmed record or Classic/K1. The validated color mode (NORM/BGR) remains the constant boot default, not a saved theme selection. A write is deferred until >=3s idle and >=15s after a previous write, and is suspended while USB CDC DTR is active. Preferences changed immediately before unplugging may not be saved.
+
+**Physical preferences PASS:** operator restored Italia + K3 IMU after full power removal. **LCD alignment physical PASS in LCD ALIGN** with X=1/Y=2 (27 Oct 2026); these values are now the firmware defaults. The updated boot default still needs a cold-boot check after reflashing, as do USB 20/20 and 100/100 ACK regressions. See [PULSE-0.3C persistence bench](docs/PULSE-0.3C-PERSISTENT-PREFERENCES-BENCH.md) and `scripts/check-pulse-uf2-prefs.py` before flashing. This uses the last 8KiB of the verified 2MiB RP2040 flash; never use on an unknown board/flash chip, RP2350 or a mass-erase recovery routine if preferences must be preserved.

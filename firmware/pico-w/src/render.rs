@@ -2,6 +2,7 @@
 //! All charts/events in this wave are unmistakably synthetic UI fixtures.
 //! Never display fake IMU, loop, voltage or motor-online measurements.
 
+use crate::preferences_store::Snapshot;
 use core::convert::Infallible;
 use core::fmt::Write;
 use embedded_graphics::{
@@ -19,6 +20,7 @@ use embedded_graphics::{
 use heapless::String;
 use pulse_ui::{
     color_lab::ColorLab,
+    diagnostics::{Diagnostics, Screen},
     imu::{ImuStatus, ImuView},
     input_lab::{raw_gpio, InputLab},
     landscape_action,
@@ -812,7 +814,7 @@ pub fn render_skin_settings(f: &mut Frame<'_>, settings: &Settings) {
 
     small(f, "PREV < > NEXT", 8, 84, WHITE);
     small(f, "CLICK: APPLY", 8, 96, GREEN);
-    small(f, "RAM ONLY / NO FLASH", 8, 105, AMBER);
+    small(f, "SAVE AUTO / 3S IDLE", 8, 105, AMBER);
     fill(f, 0, 114, 128, 14, PANEL);
     small(f, "K2+K3 HOLD: CANCEL", 7, 117, MUTED);
 }
@@ -856,4 +858,99 @@ pub fn render_color_lab(f: &mut Frame<'_>, lab: &ColorLab) {
     small(f, "CLICK: APPLY", 6, 108, GREEN);
     fill(f, 0, 116, 128, 12, PANEL);
     small(f, "HOLD K1+K2: CANCEL", 6, 118, AMBER);
+}
+
+
+
+/// Operator-accessible on-device diagnostics. This overlay NEVER writes to
+/// flash; it reports the result of the existing delayed preference writer.
+/// The LCD geometry page previews only the address window offsets. Color
+/// order/inversion and joystick GPIO mappings are unchanged.
+pub fn render_diagnostics(
+    f: &mut Frame<'_>,
+    lab: &Diagnostics,
+    snapshot: &Snapshot,
+    usb_dtr: bool,
+) {
+    f.skin = SkinId::Classic;
+    f.clear();
+    match lab.screen {
+        Screen::Preferences => {
+            fill(f, 0, 0, 128, 17, PANEL);
+            small(f, "RGD / PREFS DIAG", 5, 4, WHITE);
+            line(f, 0, 16, 127, 16, CYAN);
+
+            let state_color = match snapshot.state {
+                crate::preferences_store::PersistState::Saved
+                | crate::preferences_store::PersistState::Restored => GREEN,
+                crate::preferences_store::PersistState::ReadError
+                | crate::preferences_store::PersistState::WriteError
+                | crate::preferences_store::PersistState::JedecError
+                | crate::preferences_store::PersistState::CapacityMismatch => RED,
+                _ => AMBER,
+            };
+            small(f, "FLASH STATE:", 5, 21, MUTED);
+            small(f, snapshot.state.label(), 5, 31, state_color);
+            let mut txt: String<32> = String::new();
+            let _ = write!(txt, "JEDEC: {:08X}", snapshot.jedec_id);
+            small(f, &txt, 5, 43, WHITE);
+            txt.clear();
+            let _ = write!(txt, "SEQ: {} ERR: {}", snapshot.sequence, snapshot.error_code);
+            small(f, &txt, 5, 54, WHITE);
+            txt.clear();
+            small(f, "STORED:", 5, 65, CYAN);
+            let _ = write!(
+                txt,
+                "{} / {}",
+                snapshot.saved.skin.manifest().label,
+                snapshot.saved.page.physical_key_label()
+            );
+            small(f, &txt, 5, 75, WHITE);
+            txt.clear();
+            if let Some(pending) = snapshot.pending {
+                let _ = write!(
+                    txt,
+                    "PEND: {} / {}",
+                    pending.skin.manifest().key,
+                    pending.page.physical_key_label()
+                );
+                small(f, &txt, 5, 86, AMBER);
+            } else {
+                small(f, "PEND: NONE", 5, 86, MUTED);
+            }
+            small(
+                f,
+                if usb_dtr { "USB DTR: ACTIVE" } else { "USB DTR: INACTIVE" },
+                5, 97, if usb_dtr { AMBER } else { GREEN },
+            );
+            small(f, "CLICK: LCD ALIGN", 5, 109, CYAN);
+            small(f, "K3+K4 HOLD: EXIT", 5, 119, MUTED);
+        }
+        Screen::Geometry => {
+            // Explicit, one-pixel, native RGB565 primary borders. These
+            // distinguish clipped RAM addresses, blank margins and ghosts.
+            line(f, 0, 0, 127, 0, ITALIA_RED);
+            line(f, 0, 0, 0, 127, ITALIA_GREEN);
+            line(f, 127, 0, 127, 127, CYAN);
+            line(f, 0, 127, 127, 127, AMBER);
+            fill(f, 1, 1, 4, 4, ITALIA_RED);
+            fill(f, 123, 1, 4, 4, ITALIA_WHITE);
+            fill(f, 1, 123, 4, 4, ITALIA_GREEN);
+            fill(f, 123, 123, 4, 4, AMBER);
+
+            fill(f, 8, 18, 112, 91, PANEL);
+            stroke(f, 8, 18, 112, 91, CYAN);
+            small(f, "RGD / LCD ALIGN", 13, 23, WHITE);
+            let mut txt: String<24> = String::new();
+            let _ = write!(txt, "X OFFSET: {}", lab.preview_x);
+            small(f, &txt, 13, 39, CYAN);
+            txt.clear();
+            let _ = write!(txt, "Y OFFSET: {}", lab.preview_y);
+            small(f, &txt, 13, 51, CYAN);
+            small(f, "LEFT/RIGHT: X", 13, 68, WHITE);
+            small(f, "UP/DOWN: Y", 13, 79, WHITE);
+            small(f, "CLICK: APPLY RAM", 13, 94, GREEN);
+            small(f, "K3+K4: CANCEL", 13, 112, AMBER);
+        }
+    }
 }

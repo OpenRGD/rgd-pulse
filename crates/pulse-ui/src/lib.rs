@@ -6,9 +6,12 @@
 //! All controls are local. No joystick or K-key represents a motion command.
 
 pub mod color_lab;
+pub mod diagnostics;
 pub mod imu;
 pub mod input_lab;
 pub mod input_repeat;
+pub mod preferences;
+pub mod preferences_journal;
 pub mod settings;
 pub mod skins;
 
