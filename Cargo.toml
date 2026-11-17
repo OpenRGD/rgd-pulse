@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "crates/pulse-protocol",
   "crates/pulse-core",
-  "crates/pulse-bridge"
+  "crates/pulse-bridge",
+  "crates/pulse-ui"
 ]
 exclude = ["firmware/pico-w"]

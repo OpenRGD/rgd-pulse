@@ -1,0 +1,9 @@
+[package]
+name = "pulse-ui"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+description = "No-std input navigation and zoom state for four-screen OpenRGD Chronoscope"
+
+[lib]
+path = "src/lib.rs"
