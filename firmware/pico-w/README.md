@@ -1,13 +1,13 @@
 # Pico W + Seengreat ST7735S — Chronoscope firmware
 
-**PULSE-0.3B Console IMU live bridge — SOFTWARE CANDIDATE.** The operator confirmed ST7735S mode4 NORM/BGR physical colors, and the combined branch preserves the default 0x68+INVOFF startup, K1–K4, joystick, skins and Color Lab. K3 now has a typed sensor-stream view, but **actual IMU WS→USB→Pico hardware acceptance remains pending**.
+**PULSE-0.3C — PHYSICALLY VERIFIED OBSERVATION-ONLY BASELINE (2026-10-27).** Display geometry X=1/Y=2, fixed NORM/BGR startup, K1–K4, joystick, four skins with persisted applied skin/K page, synthetic 100/100 USB CRC ACK, and real IMU on K3 with publisher-stop STALE were accepted on Paky-01. See [release freeze and scope](../../docs/RELEASE-PULSE-0.3C.md). No actuator or safety-control functions.
 
 ## Hardware
 
 - Raspberry Pi Pico W (RP2040), Seengreat PICO-1.44inch-LCD-Display Rev 1.2.
 - 128×128 square color TFT using **SPI0 hardware at 8MHz** (GP6 SCK, GP7 MOSI), ST7735S, GP5 CS / GP11 D-C / GP12 RESET / GP13 BL.
 - The assembled PCB is physically oriented **90° clockwise from vendor portrait**, so the **joystick is left and K1..K4 are right**, vertically stacked.
-- Panel rotation **MX|MV** remains unchanged from the visually accepted operator orientation (joystick LEFT, K1–K4 RIGHT). The Color Lab isolated **MADCTL 0x68** (adds BGR bit) + **INVOFF 0x20** as the physical G/W/R calibration PASS. That combination is now applied by `lcd.init()` before the OPENRGD splash; only precise panel X/Y offsets and final reboot regression remain to verify.
+- Panel rotation **MX|MV** remains unchanged from the visually accepted operator orientation (joystick LEFT, K1–K4 RIGHT). The Color Lab isolated **MADCTL 0x68** (adds BGR bit) + **INVOFF 0x20** as the physical G/W/R calibration PASS. That combination is applied by `lcd.init()` before the OPENRGD splash. The physical geometry is **X=1, Y=2**; the final compiled startup and reboot were accepted on the assembled Pico.
 - Nine active-low buttons, already proven individually in earlier 0.1B hardware work.
 
 ## Navigation
@@ -16,7 +16,7 @@
 |---|---|
 | K1 | SOMATIC, shows actual-loop **unavailable** until adapter exists |
 | K2 | CHRONONS, DEMO-only timeline, joystick click opens selected event |
-| K3 | IMU, uncalibrated SENSOR-frame readout unavailable, DEMO-only chart |
+| K3 | IMU: physical uncalibrated sensor axes RAW/STALE via Console→Pulse Bridge; DEMO-only chart in focus; N/A when no source |
 | K4 | SYSTEM, BHL-reference **22 CFG** plus unknown observed motors, CAN and voltage |
 | Joystick UP/DOWN | Browse an item/metric |
 | Joystick LEFT/RIGHT | Change history window / filter / section |
@@ -36,7 +36,7 @@ See [PULSE-0.2C INPUT LAB BENCH](../../docs/PULSE-0.2C-INPUT-LAB-BENCH.md) for a
 
 ## PULSE-0.2D.3 — Color Lab (diagnostic candidate)
 
-**Physical color calibration PASS 2026-10-24:** ITALIA's literal green/white/red bars previously appeared magenta/black/yellow. The operator confirmed **Color Lab mode4 (NORM / BGR)** renders the three correct colors. The earlier firmware used **`MADCTL 0x60 + INVON 0x21`**; this branch now starts automatically with **`MADCTL 0x68 + INVOFF 0x20`**. The revised startup still needs physical boot/reboot verification.
+**Physical color calibration PASS (2026-10-24) and boot regression PASS (2026-10-27):** ITALIA's green/white/red bars are correct in **Color Lab mode 4 NORM/BGR**, with `MADCTL=0x68 + INVOFF=0x20`. The earlier `MADCTL=0x60 + INVON=0x21` was rejected; cold boot and X=1/Y=2 were subsequently accepted.
 
 ### Test all 4 combinations with one flash
 
@@ -49,25 +49,25 @@ Hold **K1+K2 for >=1.2s** to enter `RGD / COLOR LAB`. Three large literal RGB565
 
 No orientation, GPIO or USB changes between modes. Joystick CLICK **applies** the preview for the remainder of this power-on session; hold K1+K2 to **cancel** and return to the previously applied mode. On **every reboot**, firmware now starts in the physically verified `NORM / BGR` configuration, regardless of temporary Color Lab previews. K1+K4 INPUT LAB and K2+K3 skin SETTINGS remain unchanged.
 
-**Full physical findings and follow-up boot verification:** [PULSE-0.2D-COLOR-LAB.md](../../docs/PULSE-0.2D-COLOR-LAB.md). Mode4 was physically accepted; only the *new automatic boot path* is awaiting operator confirmation. No motor/sensor/host write operations or RP2040 flash preference writes are added.
+**Full physical findings and follow-up boot verification:** [PULSE-0.2D-COLOR-LAB.md](../../docs/PULSE-0.2D-COLOR-LAB.md). Mode4 and its *automatic startup* are physically accepted in 0.3C. No motor/sensor/host write operations or RP2040 flash preference writes are added.
 
-## PULSE-0.2D — Scroll acceleration and skins (candidate)
+## PULSE-0.2D heritage — Scroll acceleration and skins (0.3C accepted)
 
 Built-in **Winamp-inspired skin switcher** on the 128×128 Chronoscope. No new hardware controls and no change to GPIO mapping. Normal K1–K4 pages and the operator-approved physical joystick directions are preserved.
 
 - **Hold K2 + K3 together for at least 1.2 seconds** to open **SETTINGS → SKINS**.
 - Joystick **UP/DOWN or LEFT/RIGHT** cycles four fully local, instant-preview skins: **RGD Classic**, **Phosphor** (green oscilloscope), **Chrome 99** (metallic late-1990s), **Italia** (subtle green/white/red accent).
 - Joystick **CLICK** applies the preview and returns to the normal pages. Hold **K2+K3** again to **cancel** without applying.
-- The selected skin stays active on all four dashboards **until the Pico loses power or reboots**. It is **RAM-only** in this wave; we do not write RP2040 firmware flash or claim the skin is persisted in the Console. A future, separately accepted settings adapter may sync the stable skin key to persistent host preferences.
+- **Historical 0.2D:** the applied skin was RAM-only. **Current 0.3C:** the applied skin and last K page persist after power loss using the verified RP2040 flash CRC journal; preview selections, LCD Color Lab/ALIGN and sensor readings remain RAM-only. No host-side preference sync is claimed.
 - Hold the joystick in a direction for **440ms** to begin autorepeat; repetition accelerates from 240ms to 155ms after 1.6s, to 100ms after 3s. K1–K4 and joystick **CLICK never autorepeat**.
 - A tiny letter+counter in the top bar acknowledges each navigation event, including when list/zoom bounds prevent movement.
 - Existing **K1+K4** Input Lab remains accessible and uses high-contrast Classic coloring.
 
 Four pages, visual `DEMO` labels, real vs synthetic provenance, USB CDC `HELLO / DEMO / CRC ACK` and no-motion safety boundaries are unchanged. Original skin accents **never recolor warning/danger semantics**.
 
-See [PULSE-0.2D skins/navigation spec](../../docs/PULSE-0.2D-SKINS-NAVIGATION.md). Current implementation remains a **software candidate** until a physical Pico test verifies settings chords, acceleration and USB regression.
+See [PULSE-0.2D skins/navigation spec](../../docs/PULSE-0.2D-SKINS-NAVIGATION.md). The combined 0.3C operator test accepted skins, navigation and USB regressions. Timing-specific joystick repeat performance was not measured with a dedicated timing instrument.
 
-## PULSE-0.3B — K3 physical IMU read-only stream candidate
+## PULSE-0.3B — K3 real IMU stream (physical PASS on 0.3C firmware)
 
 This branch adds a **separate** `PULSE/IMU-1` 56-byte CRC16 protocol, with `IMU Probe/ProbeAck` negotiation after the existing `PULSE/1 HELLO`. It does **not** change `DemoTicks`, `DemoAck`, joystick GPIO, skins, color calibration or the motor-free safety boundary.
 
@@ -88,21 +88,22 @@ Expected: `PULSE/1 HELLO OK`, then `PULSE/IMU-1 PROBE/ACK OK`, then `Console v0.
 
 **Do not run `serial-demo` simultaneously** with `imu-live`: they share the Pico CDC device (not the physical IMU CH340). After `imu-live` exits, run the familiar `serial-demo "$PICO_PORT" 20` then `100` regression.
 
-See [PULSE-0.3B physical bench](../../docs/PULSE-0.3B-CONSOLE-IMU-LIVE-BENCH.md). Physical IMU values, stale transitions, optional history and USB regressions are still unverified on this new firmware.
+See [PULSE-0.3B physical bench](../../docs/PULSE-0.3B-CONSOLE-IMU-LIVE-BENCH.md). Physical K3 values, PULSE/1+PULSE/IMU-1 handshakes, publisher-stop STALE and 100/100 synthetic CRC ACK are verified on 0.3C. Timestamped real IMU history remains unimplemented.
 
 ## Compile and flash
 
 ```bash
 cd ~/openrgd/rgd-pulse
 git fetch origin
-git switch feat/pulse-0.3b-console-imu-live
+git switch --detach cd2d640d0823e22a1b89e049d2e46a83dd5e2ce8
 git pull --ff-only
 cargo test --workspace
 
 cd firmware/pico-w
 rustup target add thumbv6m-none-eabi
 cargo build --release
-elf2uf2-rs target/thumbv6m-none-eabi/release/pulse-pico-w pulse-pico-w.uf2
+elf2uf2-rs target/thumbv6m-none-eabi/release/pulse-pico-w pulse-pico-w-0.3c.uf2
+python3 ../../scripts/check-pulse-uf2-prefs.py pulse-pico-w-0.3c.uf2
 ```
 
 Power **only** from the Pico's Micro-USB port via a real data hub. If flashing, hold the **Pico BOOTSEL**, connect Micro-USB and then release BOOTSEL. Explicitly verify the **RPI-RP2** mount; another STMicroelectronics device can appear as a disk on this mini-PC. See [the physical bench plan](../../docs/CHRONOSCOPE-0.2B-HARDWARE-BENCH.md) for cautious copying, confirmation and regression tests.
@@ -115,11 +116,12 @@ Power **only** from the Pico's Micro-USB port via a real data hub. If flashing, 
 - USB CDC session resets on DTR falling. It emits a v1 HELLO when rearmed and ACKs only newly accepted valid `DemoTicks` frames. All frames and charts remain explicitly synthetic.
 - The 5-inch main Console remains the rich host interface. The Pico will later receive bounded, read-only summaries through versioned telemetry UI messages; it does **not** fetch motors, CAN, IMU serial or Chronons by itself.
 
-## Still unverified on physical 0.2B firmware
+## PULSE-0.3C accepted and deferred measurements
 
-- Physical 0.2C input/navigation and 20/20 synthetic HELLO/ACK were operator-verified. ST7735S Color Lab mode4 was physically verified to show correct G/W/R; the *new compiled boot default* and final pixel offsets/clipping still require physical regression.
-- Actual redraw latency and joysticks during simultaneous USB traffic.
-- 3/3 repeated serial opens, 100/100 ACK and cable disconnect/reconnect regressions.
-- Actual K3 raw IMU sensor-frame reception on physical Pico requires a live end-to-end smoke; true Somatic loop timing, source-verified Chronons, calibrated torso transform, full joint map and measured drive voltage remain deferred.
+**Physical PASS (operator, October 2026):** compiled landscape ST7735S X=1/Y=2 and NORM/BGR, joystick/buttons, persisted Italia+K3 through complete USB power cycle, CRC-checked synthetic USB 100/100 ACK/0 unexpected, live K3 uncalibrated IMU via the existing Console WS and PULSE/IMU-1 PROBE/ACK, then greyed `STALE` values when publisher stops.
+
+**Deferred:** calibrated sensor-frame→torso transform; time-synchronized physical IMU history; redraw/packet latency measured instrumentally; real K1 Somatic loop timing, K2 trusted Chronons, K4 real host/motor/CAN/power sources; Console authorization for remote use. Source age is not a certified end-to-end latency.
+
+The original 0.3C physical firmware source is frozen at `release/pulse-0.3c-physical-20261027`. The last 8KiB of a verified standard 2MiB RP2040 flash is reserved for preferences. Avoid flash mass erase or flashing an unknown board; always run `scripts/check-pulse-uf2-prefs.py` before generating a physical image.
 
 The Pico is not an E-stop, safety supervisor, balance sensor or actuator controller. CRC detects accidental transmission corruption but does not authenticate devices.
