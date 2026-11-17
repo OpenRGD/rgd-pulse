@@ -43,7 +43,13 @@ impl<'a> Lcd<'a> {
         reset: Output<'a>,
         bl: Output<'a>,
     ) -> Self {
-        Self { spi, cs, dc, reset, bl }
+        Self {
+            spi,
+            cs,
+            dc,
+            reset,
+            bl,
+        }
     }
 
     fn cmd(&mut self, value: u8) {
@@ -76,9 +82,10 @@ impl<'a> Lcd<'a> {
         Timer::after_millis(140).await;
         self.cmd(0x11); // exit sleep, ST7735S needs >=120ms
         Timer::after_millis(140).await;
-        self.cmd(0x3A); self.data(&[0x05]); // 16-bit RGB565
-        // Power-on hardware profile verified with real green/white/red
-        // swatches. Apply before splash so startup colors are also correct.
+        self.cmd(0x3A);
+        self.data(&[0x05]); // 16-bit RGB565
+                            // Power-on hardware profile verified with real green/white/red
+                            // swatches. Apply before splash so startup colors are also correct.
         self.apply_color_mode(VALIDATED_BOOT_MODE);
         self.cmd(0x13); // normal display mode
         self.cmd(0x29); // display on

@@ -1,6 +1,6 @@
 # Pico W + Seengreat ST7735S — Chronoscope firmware
 
-**Current candidate PULSE-0.2D.3 — calibrated ST7735S color profile.** Color Lab's mode4 was **physically confirmed** on 2026-10-24: NORM / BGR shows correct green, white and red. This branch now uses mode4 as the **compiled boot default**. The new automatic startup has not yet been re-flashed and independently verified; historical joystick/UI and synthetic USB tests remain separate evidence.
+**PULSE-0.3B Console IMU live bridge — SOFTWARE CANDIDATE.** The operator confirmed ST7735S mode4 NORM/BGR physical colors, and the combined branch preserves the default 0x68+INVOFF startup, K1–K4, joystick, skins and Color Lab. K3 now has a typed sensor-stream view, but **actual IMU WS→USB→Pico hardware acceptance remains pending**.
 
 ## Hardware
 
@@ -67,12 +67,35 @@ Four pages, visual `DEMO` labels, real vs synthetic provenance, USB CDC `HELLO /
 
 See [PULSE-0.2D skins/navigation spec](../../docs/PULSE-0.2D-SKINS-NAVIGATION.md). Current implementation remains a **software candidate** until a physical Pico test verifies settings chords, acceleration and USB regression.
 
+## PULSE-0.3B — K3 physical IMU read-only stream candidate
+
+This branch adds a **separate** `PULSE/IMU-1` 56-byte CRC16 protocol, with `IMU Probe/ProbeAck` negotiation after the existing `PULSE/1 HELLO`. It does **not** change `DemoTicks`, `DemoAck`, joystick GPIO, skins, color calibration or the motor-free safety boundary.
+
+The host `pulse-bridge imu-live` subscribes only to the **existing** Console WebSocket at `ws://127.0.0.1:8088/api/v1/stream?robot_id=paky-01` and only forwards `console.v1` `type=imu` records matching `console.imu.v0.1-candidate` and strict `paky-01` / `physical` source/frame flags. The Python publisher continues to own the IMU's CH340 serial exclusively. This gateway is **loopback-only but not user-authenticated**: keep it off LAN.
+
+While forwarding verified local physical observations, **K3 IMU** displays `RAW` (fresh <800ms) or `STALE` (expired), sensor-frame roll/pitch, **YAW* UNCAL**, gyro and acceleration components for the selected X/Y/Z axis, temperature and observation age. The K3 focus chart remains visibly **DEMO**; timestamped physical history is not yet implemented. No claim of calibrated torso attitude, absolute compass heading, certified Chronograph time or balancing safety is made.
+
+### Start verified-local IMU stream (after installing new firmware)
+
+```bash
+cd ~/openrgd/rgd-pulse
+PICO_PORT="/dev/serial/by-id/usb-OpenRGD_RGD_Pulse_Pico_W_prototype-if00"
+test -e "$PICO_PORT" || { echo "Pico Pulse not present"; exit 1; }
+cargo run -p pulse-bridge -- imu-live "$PICO_PORT" 30
+```
+
+Expected: `PULSE/1 HELLO OK`, then `PULSE/IMU-1 PROBE/ACK OK`, then `Console v0.5 WS connected` and lines like `IMU #1 ... SENSOR XYZ ...`. The existing IMU publisher must already be running and sending accepted observations to Console. No new Python IMU reader is launched by Pulse.
+
+**Do not run `serial-demo` simultaneously** with `imu-live`: they share the Pico CDC device (not the physical IMU CH340). After `imu-live` exits, run the familiar `serial-demo "$PICO_PORT" 20` then `100` regression.
+
+See [PULSE-0.3B physical bench](../../docs/PULSE-0.3B-CONSOLE-IMU-LIVE-BENCH.md). Physical IMU values, stale transitions, optional history and USB regressions are still unverified on this new firmware.
+
 ## Compile and flash
 
 ```bash
 cd ~/openrgd/rgd-pulse
 git fetch origin
-git switch feat/pulse-0.2d-color-lab
+git switch feat/pulse-0.3b-console-imu-live
 git pull --ff-only
 cargo test --workspace
 
@@ -97,6 +120,6 @@ Power **only** from the Pico's Micro-USB port via a real data hub. If flashing, 
 - Physical 0.2C input/navigation and 20/20 synthetic HELLO/ACK were operator-verified. ST7735S Color Lab mode4 was physically verified to show correct G/W/R; the *new compiled boot default* and final pixel offsets/clipping still require physical regression.
 - Actual redraw latency and joysticks during simultaneous USB traffic.
 - 3/3 repeated serial opens, 100/100 ACK and cable disconnect/reconnect regressions.
-- Real Somatic loop measurement, Chronograph provenance/Chronon data, calibrated IMU, full joint mapping and measured voltage.
+- Actual K3 raw IMU sensor-frame reception on physical Pico requires a live end-to-end smoke; true Somatic loop timing, source-verified Chronons, calibrated torso transform, full joint map and measured drive voltage remain deferred.
 
 The Pico is not an E-stop, safety supervisor, balance sensor or actuator controller. CRC detects accidental transmission corruption but does not authenticate devices.

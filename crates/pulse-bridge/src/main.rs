@@ -1,3 +1,7 @@
+mod console_imu;
+mod imu_import;
+mod imu_live;
+
 use pulse_core::Observer;
 use pulse_protocol::{decode, encode, Frame, Kind, StreamDecoder};
 use std::{
@@ -12,7 +16,7 @@ const PROTOTYPE_BOARD_ID: u32 = 1;
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  pulse-bridge demo [count]\n  pulse-bridge serial-demo <explicit-port-path> [count]"
+        "usage:\n  pulse-bridge demo [count]\n  pulse-bridge serial-demo <explicit-port-path> [count]\n  pulse-bridge imu-preview <redacted-console-observation.json>\n  pulse-bridge imu-live <exact-pico-by-id-port> [seconds]"
     );
     process::exit(2);
 }
@@ -48,12 +52,56 @@ fn main() {
             }
             serial_demo(&args[1], parse_count(args.get(2), 20))
         }
+        Some("imu-preview") => {
+            if args.len() != 2 {
+                usage();
+            }
+            imu_preview(&args[1])
+        }
+        Some("imu-live") => {
+            if args.len() < 2 || args.len() > 3 {
+                usage();
+            }
+            imu_live::run(&args[1], parse_count(args.get(2), 30) as u64)
+        }
         _ => usage(),
     };
     if let Err(error) = result {
         eprintln!("Pulse error: {error}");
         process::exit(1);
     }
+}
+
+/// Local, intentionally UNVERIFIED diagnostic of the sample JSON shape.
+/// Never subscribes to Console, accesses serial, writes Pico USB or
+/// claims authenticated live data. A real host subscriber is future work.
+fn imu_preview(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata = std::fs::metadata(path)?;
+    if !metadata.is_file() || metadata.len() > 16 * 1024 {
+        return Err("IMU preview expects a regular <=16KiB JSON file".into());
+    }
+    let raw = std::fs::read_to_string(path)?;
+    let sample = imu_import::parse_offline_candidate_json(&raw)?;
+    println!("PULSE IMU PREVIEW / OFFLINE JSON / UNVERIFIED / NO_USB / NO_MOTION");
+    println!(
+        "source={} sensor={} frame={} seq={}",
+        pulse_ui::imu::SOURCE_ID,
+        pulse_ui::imu::SENSOR_ID,
+        pulse_ui::imu::SENSOR_FRAME_ID,
+        sample.source_sequence
+    );
+    println!(
+        "RAW SENSOR XYZ roll={:.2}deg pitch={:.2}deg yaw*={:.2}deg (YAW UNCAL)",
+        sample.roll_cdeg as f64 / 100.0,
+        sample.pitch_cdeg as f64 / 100.0,
+        sample.yaw_cdeg as f64 / 100.0,
+    );
+    println!(
+        "gyro(mrad/s)={:?} accel(mm/s2)={:?} temp(cdeg)={:?}",
+        sample.gyro_mrad_s, sample.accel_mm_s2, sample.temp_cdeg
+    );
+    println!("age=UNKNOWN; not a verified live Console subscription; never robot pose");
+    Ok(())
 }
 
 fn run_offline_demo(count: u32) {

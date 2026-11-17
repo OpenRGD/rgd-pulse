@@ -25,9 +25,14 @@ use embassy_usb::{
 };
 use lcd::Lcd;
 use panic_halt as _;
-use pulse_protocol::{encode, Frame, Kind, StreamDecoder};
+use pulse_protocol::{
+    encode,
+    imu_wire::{self, Decoder as ImuDecoder, Frame as ImuFrame},
+    Frame, Kind, StreamDecoder,
+};
 use pulse_ui::{
     color_lab::{ColorLab, VALIDATED_BOOT_MODE},
+    imu::{FrameQuality, ImuSample, ImuStatus, ImuView, Origin},
     input_lab::InputLab,
     input_repeat::InputRepeater,
     landscape_action,
@@ -132,10 +137,14 @@ async fn main(spawner: Spawner) {
     let mut input_lab = InputLab::new(); // K1+K4 >=1.2s: raw GPIO diagnostics
     let mut settings = Settings::new(); // K2+K3 >=1.2s: Winamp-style skin picker
     let mut color_lab = ColorLab::new(); // K1+K2 >=1.2s: LCD RGB/BGR x INV calibration
-    // Track the exact mode that lcd.init() applied before the splash.
+                                         // Track the exact mode that lcd.init() applied before the splash.
     let mut lcd_color_mode = VALIDATED_BOOT_MODE;
     let mut repeater = InputRepeater::new(); // Direction keys only, never CLICK/K1-K4
-    let mut decoder = StreamDecoder::new();
+    let mut decoder = StreamDecoder::new(); // Existing PULSE/1 frames, unchanged
+    let mut imu_decoder = ImuDecoder::new(); // Separate PULSE/IMU-1 read-only channel
+    let mut imu_negotiated = false; // Must receive explicit Probe before real frames
+    let mut imu_view = ImuView::new();
+    let mut last_imu_status = ImuStatus::NoSource;
     let mut rx_packet = [0u8; 64];
     let mut usb_connected = false;
     let mut last_demo_ms: Option<u64> = None;
@@ -153,6 +162,9 @@ async fn main(spawner: Spawner) {
             if usb_connected {
                 usb_connected = false;
                 decoder.reset();
+                imu_decoder.reset();
+                imu_negotiated = false;
+                imu_view.clear();
                 last_demo_ms = None;
                 last_demo_sequence = None;
                 needs_draw = true;
@@ -163,6 +175,9 @@ async fn main(spawner: Spawner) {
                 Either::First(()) => {
                     usb_connected = true;
                     decoder.reset();
+                    imu_decoder.reset();
+                    imu_negotiated = false;
+                    imu_view.clear();
                     last_demo_ms = None;
                     last_demo_sequence = None;
                     let hello = encode(Frame {
@@ -205,6 +220,9 @@ async fn main(spawner: Spawner) {
                                     if cdc.write_packet(&receipt).await.is_err() {
                                         usb_connected = false;
                                         decoder.reset();
+                                        imu_decoder.reset();
+                                        imu_negotiated = false;
+                                        imu_view.clear();
                                         last_demo_ms = None;
                                         last_demo_sequence = None;
                                         break;
@@ -222,6 +240,61 @@ async fn main(spawner: Spawner) {
                             }
                             _ => {}
                         }
+
+                        // IMU wire is entirely separate from legacy PULSE/1
+                        // DEMO handling. The Pico never treats DemoTicks as
+                        // sensor data, and never accepts an IMU sample before
+                        // an explicit per-CDC-session capability probe.
+                        if let Some(Ok(packet)) = imu_decoder.push(byte) {
+                            match packet {
+                                ImuFrame::Probe => {
+                                    let response = imu_wire::encode(ImuFrame::ProbeAck);
+                                    if cdc.write_packet(&response).await.is_ok() {
+                                        imu_negotiated = true;
+                                    } else {
+                                        usb_connected = false;
+                                        imu_negotiated = false;
+                                        imu_view.clear();
+                                        break;
+                                    }
+                                }
+                                ImuFrame::SensorSample(sample) if imu_negotiated => {
+                                    let observation = ImuSample {
+                                        origin: Origin::ConsoleReadOnlyObservation,
+                                        frame_quality: FrameQuality::SensorAxesUnverified,
+                                        source_session: sample.session,
+                                        source_sequence: sample.sequence,
+                                        roll_cdeg: sample.angles_cdeg[0],
+                                        pitch_cdeg: sample.angles_cdeg[1],
+                                        yaw_cdeg: sample.angles_cdeg[2],
+                                        gyro_mrad_s: [
+                                            sample.gyro_centirad_s[0] as i32 * 10,
+                                            sample.gyro_centirad_s[1] as i32 * 10,
+                                            sample.gyro_centirad_s[2] as i32 * 10,
+                                        ],
+                                        accel_mm_s2: [
+                                            sample.accel_centims2[0] as i32 * 10,
+                                            sample.accel_centims2[1] as i32 * 10,
+                                            sample.accel_centims2[2] as i32 * 10,
+                                        ],
+                                        temp_cdeg: sample.temperature_cdeg,
+                                        host_age_at_forward_ms: Some(sample.age_at_host_forward_ms),
+                                    };
+                                    if imu_view
+                                        .observe(observation, Instant::now().as_millis())
+                                        .is_ok()
+                                    {
+                                        // Redraw physical IMU readings only on K3;
+                                        // avoid 10fps 32KiB SPI flushes on unrelated
+                                        // pages while receiving the same USB stream.
+                                        needs_draw |= ui.page == pulse_ui::Page::Imu;
+                                    }
+                                }
+                                ImuFrame::SensorSample(_) | ImuFrame::ProbeAck => {
+                                    // Ignore unsolicited sensor/ACK frames.
+                                }
+                            }
+                        }
                     }
                 }
                 Either::First(Err(_)) => {
@@ -229,6 +302,9 @@ async fn main(spawner: Spawner) {
                     last_demo_ms = None;
                     last_demo_sequence = None;
                     decoder.reset();
+                    imu_decoder.reset();
+                    imu_negotiated = false;
+                    imu_view.clear();
                     needs_draw = true;
                 }
                 Either::Second(()) => {}
@@ -250,6 +326,17 @@ async fn main(spawner: Spawner) {
         if new_usb_state != old_usb_state {
             old_usb_state = new_usb_state;
             needs_draw = true;
+        }
+
+        // Mark LIVE -> STALE even when the publisher stops and no more USB
+        // packets arrive. Pico time is compared only with its own receipt;
+        // the host computes source age in its own CLOCK_MONOTONIC domain.
+        let new_imu_status = imu_view.status(now_ms);
+        if new_imu_status != last_imu_status {
+            last_imu_status = new_imu_status;
+            if ui.page == pulse_ui::Page::Imu {
+                needs_draw = true;
+            }
         }
 
         // Sample the physically accepted GPIO mapping once. Three disjoint,
@@ -299,9 +386,8 @@ async fn main(spawner: Spawner) {
         } else {
             repeater.poll(mask, now_ms)
         };
-        let chord_blocked = input_lab.chord_held()
-            || settings.chord_held(mask)
-            || color_lab.chord_held(mask);
+        let chord_blocked =
+            input_lab.chord_held() || settings.chord_held(mask) || color_lab.chord_held(mask);
 
         if !input_lab.active && !was_in_lab && !overlay_switched && !chord_blocked {
             let events = pressed | repeated;
@@ -354,7 +440,7 @@ async fn main(spawner: Spawner) {
                     demo_sequence: last_demo_sequence.unwrap_or(0),
                     invalid_frames,
                 };
-                render::render(&mut image, &ui, &info);
+                render::render(&mut image, &ui, &info, &imu_view, now_ms);
             }
             lcd.flush_rgb565(image.data);
             needs_draw = false;

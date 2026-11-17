@@ -1,21 +1,24 @@
 # OpenRGD Pulse & Chronoscope
 
-**PULSE-0.2D — joystick acceleration + dashboard skin candidate.** An independent, non-actuating diagnostics node for OpenRGD robots.
+**PULSE-0.3B — physical IMU via Console read-only fan-out (software candidate).** Independent, non-actuating diagnostics node for OpenRGD robots; K3 IMU hardware integration is not yet physically accepted.
 
 This repository separates the RP2040/Pico W device firmware from host-side telemetry and hardware-specific robot inventories. **It is not a safety controller, an E-stop, or a motor driver.**
 
 ## Architecture
 
 ```text
-Somatic Runtime / sensor / Chronon sources (future read-only adapters)
-                                     |
-                              pulse-bridge (Ubuntu)
-                                     | USB CDC PULSE/1: HELLO / DEMO / ACK verified
-                              Pico W (non-actuating)
-                                     |
-                    4x Chronoscope dashboards + skin switcher
-                                     |
-                     Seengreat ST7735S 128x128 SPI0 LCD
+Paky-01 IMU / 1 existing exclusive WIT reader
+          |
+    imu_publish.py / accepted physical observations
+          |
+  OpenRGD Console localhost:8088  (NOT user-authenticated WS)
+          |  console.v1 type=imu / console.imu.v0.1-candidate
+     pulse-bridge imu-live (strict source validation)
+          |  USB CDC PULSE/IMU-1 Probe/ACK + 56-byte sensor frames
+          |  Existing PULSE/1 DEMO/ACK remains independent
+       Pico W / K3 RAW SENSOR XYZ, age / STALE, YAW* UNCAL
+          |
+  4 Chronoscope pages / skins / Color Lab ST7735S 0x68+INVOFF
 ```
 
 * `crates/pulse-protocol`: `no_std` fixed-size binary telemetry frame v1, CRC-16/CCITT-FALSE.
@@ -59,8 +62,24 @@ Only explicitly synthetic `DemoTicks` are sent; no real motor commands or actual
 
 The HMI design is documented in [PULSE-0.2A UI SPEC](docs/CHRONOSCOPE-0.2A-UI-SPEC.md). The four pages K1 SOMATIC / K2 CHRONONS / K3 IMU / K4 SYSTEM have been exercised on Paky-01 with the joystick LEFT and four buttons RIGHT. In 0.2D, holding joystick directions repeats with acceleration and the new **K2+K3 SETTINGS → SKINS** menu previews four original visual styles (Classic, Phosphor, Chrome 99, Italia); CLICK applies for **this power-on session only**. See [0.2D bench/design](docs/PULSE-0.2D-SKINS-NAVIGATION.md). Graphs remain explicitly DEMO fixtures, not measured Somatic/Chronon/IMU data; no RP2040 flash preference writes.
 
+## PULSE-0.3B: real IMU from the existing Console subscriber (candidate)
+
+The real Paky-01 WIT/JY901 sensor already has an exclusive Python reader. **Do not open it again from Pulse**. The existing Console exposes `ws://127.0.0.1:8088/api/v1/stream?robot_id=paky-01`; subscribe to `console.v1 type=imu` with `console.imu.v0.1-candidate` data. The publisher POST and token are **not** used.
+
+`pulse-bridge imu-live` validates the read-side schema, physical source identity, session/sequence, time quality and uncalibrated sensor axes; forwards only a bounded <=10 Hz stream over the separate `PULSE/IMU-1` CRC-protected protocol, with an explicit per-session Pico capability handshake. It never reuses `DemoTicks` for real readings.
+
+K3 displays RAW sensor-frame roll, pitch, `YAW* UNCAL`, gyro/acceleration selected X/Y/Z, temperature, age and `STALE` after 800ms. All historical trend charts still explicitly say DEMO; Somatic/Chronons/System remain unchanged. Serial demos and the fixed ST7735S 0x68/INVOFF color profile must be regression tested.
+
+```bash
+cd ~/openrgd/rgd-pulse
+PICO_PORT="/dev/serial/by-id/usb-OpenRGD_RGD_Pulse_Pico_W_prototype-if00"
+cargo run -p pulse-bridge -- imu-live "$PICO_PORT" 30
+```
+
+**This feature has not yet passed the mini-PC↔Pico physical IMU commissioning.** See the complete safe flash and bench plan in [PULSE-0.3B Console IMU Live Bench](docs/PULSE-0.3B-CONSOLE-IMU-LIVE-BENCH.md). The Console's local WS uses **loopback restriction, not user authentication**; do not expose :8088 to the LAN. No motor actuation, calibration or certified robot orientation is implemented.
+
 ## Planned waves
 
-PULSE-0.1A protocol, 0.1B LCD/buttons, 0.1C synthetic USB CDC, 0.2A four-page design, 0.2B graphical firmware, 0.2C physically verified input map, **0.2D joystick repeat and skins (candidate)**. Next: persistent per-device skin preferences, then read-only real Somatic/IMU/Chronon adapters. Canonical contract promotion and module registration require separate reviews.
+PULSE-0.1A protocol, 0.1B LCD/buttons, 0.1C synthetic USB CDC, 0.2A four-page design, 0.2B graphical firmware, 0.2C physically verified input map, **0.2D joystick repeat and skins (candidate)**. **0.3B IMU Console read-only adapter (software candidate)** is the next wave; actual Somatic/Chronon adapters and persistent skin preferences remain separate. Canonical contract promotion and module registration require separate reviews.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) and [hardware/boards/seengreat-pico-144-rev12.md](hardware/boards/seengreat-pico-144-rev12.md).
