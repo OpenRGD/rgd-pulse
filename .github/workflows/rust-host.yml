@@ -1,0 +1,16 @@
+name: Rust host tests
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test host workspace
+        run: cargo test --workspace
+      - name: Format host workspace
+        run: cargo fmt --all -- --check

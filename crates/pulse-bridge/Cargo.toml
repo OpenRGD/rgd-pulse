@@ -1,0 +1,10 @@
+[package]
+name = "pulse-bridge"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Synthetic host bridge demo for OpenRGD Pulse"
+
+[dependencies]
+pulse-core = { path = "../pulse-core" }
+pulse-protocol = { path = "../pulse-protocol" }

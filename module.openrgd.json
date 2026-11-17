@@ -1,0 +1,18 @@
+{
+  "schema_version": "0.1.0-candidate",
+  "module_id": "org.openrgd.pulse",
+  "module_version": "0.1.0",
+  "name": "OpenRGD Pulse",
+  "runtime": "host-daemon",
+  "registry_status": "proposal-only",
+  "non_actuating": true,
+  "automatic_motion_on_load": false,
+  "capabilities": [
+    "pulse.telemetry.read",
+    "pulse.heartbeat.inspect",
+    "pulse.events.inspect",
+    "pulse.chronoscope.navigate"
+  ],
+  "capability_status": "planned",
+  "notes": "Manifest describes target capabilities only. USB CDC, real runtime integration and Chronoscope are NOT implemented in PULSE-0.1A."
+}

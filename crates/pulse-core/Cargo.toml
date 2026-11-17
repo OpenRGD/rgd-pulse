@@ -1,0 +1,9 @@
+[package]
+name = "pulse-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Read-only link and progress observer for OpenRGD Pulse"
+
+[dependencies]
+pulse-protocol = { path = "../pulse-protocol" }
