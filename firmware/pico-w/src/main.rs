@@ -27,6 +27,7 @@ use lcd::Lcd;
 use panic_halt as _;
 use pulse_protocol::{encode, Frame, Kind, StreamDecoder};
 use pulse_ui::{
+    color_lab::{ColorLab, VALIDATED_BOOT_MODE},
     input_lab::InputLab,
     input_repeat::InputRepeater,
     landscape_action,
@@ -130,6 +131,9 @@ async fn main(spawner: Spawner) {
     let mut ui = UiState::new(); // K1 SOMATIC default
     let mut input_lab = InputLab::new(); // K1+K4 >=1.2s: raw GPIO diagnostics
     let mut settings = Settings::new(); // K2+K3 >=1.2s: Winamp-style skin picker
+    let mut color_lab = ColorLab::new(); // K1+K2 >=1.2s: LCD RGB/BGR x INV calibration
+    // Track the exact mode that lcd.init() applied before the splash.
+    let mut lcd_color_mode = VALIDATED_BOOT_MODE;
     let mut repeater = InputRepeater::new(); // Direction keys only, never CLICK/K1-K4
     let mut decoder = StreamDecoder::new();
     let mut rx_packet = [0u8; 64];
@@ -248,41 +252,46 @@ async fn main(spawner: Spawner) {
             needs_draw = true;
         }
 
-        // Sample the physical GPIOs without altering their proven mapping.
-        // K1+K4 hold opens Input Lab. K2+K3 hold opens skin settings.
-        // These are disjoint, mutually exclusive local UI overlays.
+        // Sample the physically accepted GPIO mapping once. Three disjoint,
+        // mutually exclusive *local* hold chords: K1+K4 INPUT, K2+K3 SKINS,
+        // K1+K2 COLOR. A long hold never communicates a robot command.
         let mut mask = 0u16;
         for (index, key) in keys.iter().enumerate() {
             if key.is_low() {
                 mask |= 1 << index;
             }
         }
+
         let was_in_lab = input_lab.active;
         let was_in_settings = settings.open;
+        let was_in_color = color_lab.open;
 
-        if !settings.open {
+        // Disabled overlays see no raw input, which resets chord timers and
+        // prevents a held key from arming a second mode on exit.
+        if !settings.open && !color_lab.open {
             needs_draw |= input_lab.observe(mask, now_ms);
         } else {
-            // Prevent the Input Lab chord from arming inside Settings.
             needs_draw |= input_lab.observe(0, now_ms);
         }
-        if !input_lab.active {
+        if !input_lab.active && !color_lab.open {
             needs_draw |= settings.observe(mask, now_ms, true);
         } else {
             needs_draw |= settings.observe(0, now_ms, false);
         }
+        if !input_lab.active && !settings.open {
+            needs_draw |= color_lab.observe(mask, now_ms, true);
+        } else {
+            needs_draw |= color_lab.observe(0, now_ms, false);
+        }
 
-        let overlay_switched =
-            was_in_lab != input_lab.active || was_in_settings != settings.open;
+        let overlay_switched = was_in_lab != input_lab.active
+            || was_in_settings != settings.open
+            || was_in_color != color_lab.open;
         if overlay_switched {
-            repeater.reset(); // Never carry a held direction across overlays.
+            repeater.reset();
             needs_draw = true;
         }
 
-        // Physical UP/DOWN/LEFT/RIGHT can auto-repeat after an initial
-        // 440ms hold: 240 -> 155 -> 100ms progression as hold duration grows.
-        // K page switches and the center click remain single, edge-only.
-        // The old 140ms debouncer still applies to fresh press edges.
         let pressed = mask & !previous_mask;
         let repeated = if input_lab.active {
             repeater.reset();
@@ -290,20 +299,24 @@ async fn main(spawner: Spawner) {
         } else {
             repeater.poll(mask, now_ms)
         };
+        let chord_blocked = input_lab.chord_held()
+            || settings.chord_held(mask)
+            || color_lab.chord_held(mask);
 
-        let chord_blocked = input_lab.chord_held() || settings.chord_held(mask);
         if !input_lab.active && !was_in_lab && !overlay_switched && !chord_blocked {
             let events = pressed | repeated;
             for index in 0..9 {
                 if (events & (1 << index)) != 0 {
-                    let auto_repeat = repeated & (1 << index) != 0;
+                    let auto_repeat = (repeated & (1 << index)) != 0;
                     let debounce_ok = auto_repeat
                         || last_key_ms[index] == 0
                         || now_ms.saturating_sub(last_key_ms[index]) >= BUTTON_DEBOUNCE_MS;
                     if debounce_ok {
                         last_key_ms[index] = now_ms.max(1);
                         if let Some(action) = landscape_action(index) {
-                            if settings.open {
+                            if color_lab.open {
+                                needs_draw |= color_lab.handle(action);
+                            } else if settings.open {
                                 needs_draw |= settings.handle(action);
                             } else {
                                 needs_draw |= ui.handle(action);
@@ -313,12 +326,22 @@ async fn main(spawner: Spawner) {
                 }
             }
         }
-
         previous_mask = mask;
 
         if needs_draw {
-            if input_lab.active {
-                // Diagnostic pin labels have a stable, legible classic palette.
+            // LCD command 0x36 (MADCTL R/B order) and 0x20/0x21
+            // (INVOFF/INVON) are applied only when the preview changes.
+            // No flash writes, no CPU reset and no change to orientation.
+            let desired_color_mode = color_lab.visual_mode();
+            if desired_color_mode != lcd_color_mode {
+                lcd.apply_color_mode(desired_color_mode);
+                lcd_color_mode = desired_color_mode;
+            }
+
+            if color_lab.open {
+                image.skin = SkinId::Classic;
+                render::render_color_lab(&mut image, &color_lab);
+            } else if input_lab.active {
                 image.skin = SkinId::Classic;
                 render::render_input_lab(&mut image, &input_lab);
             } else if settings.open {

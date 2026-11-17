@@ -18,6 +18,7 @@ use embedded_graphics::{
 };
 use heapless::String;
 use pulse_ui::{
+    color_lab::ColorLab,
     input_lab::{raw_gpio, InputLab},
     landscape_action,
     settings::Settings,
@@ -577,4 +578,46 @@ pub fn render_skin_settings(f: &mut Frame<'_>, settings: &Settings) {
     small(f, "RAM ONLY / NO FLASH", 8, 105, AMBER);
     fill(f, 0, 114, 128, 14, PANEL);
     small(f, "K2+K3 HOLD: CANCEL", 7, 117, MUTED);
+}
+
+/// Local operator-visible **literal RGB565** test, independent of the Italia
+/// skin's palette-role mapping. Color-mode A (the previously flashed mode)
+/// was observed to produce MAGENTA/BLACK/YELLOW for G/W/R. The operator can
+/// select one of four reversible LCD controller configurations without new
+/// BOOTSEL flashes, keeping the board joystick-left, K buttons-right.
+pub fn render_color_lab(f: &mut Frame<'_>, lab: &ColorLab) {
+    // Only raw-color swatches are decisive: fonts/panels use Classic's
+    // semantic palette and may themselves look inverted in modes A/C.
+    f.skin = SkinId::Classic;
+    f.clear();
+    fill(f, 0, 0, 128, 16, PANEL);
+    small(f, "RGD / COLOR LAB", 4, 4, WHITE);
+    fill(f, 0, 15, 128, 1, CYAN);
+
+    let mut step: String<8> = String::new();
+    let _ = write!(step, "MODE {}/4", lab.preview.index() + 1);
+    small(f, &step, 6, 21, WHITE);
+    big(f, lab.preview.label(), 6, 32, CYAN);
+
+    // Programmatic *unmixed* RGB565 primaries, in fixed order.
+    // All panels use the exact same 0x07E0/0xFFFF/0xF800 data for each mode.
+    // A red->yellow, green->magenta, white->black result is the specific
+    // optical signature motivating this calibration.
+    const GREEN_PRIMARY: Rgb565 = Rgb565::new(0, 63, 0);
+    const WHITE_PRIMARY: Rgb565 = Rgb565::new(31, 63, 31);
+    const RED_PRIMARY: Rgb565 = Rgb565::new(31, 0, 0);
+    fill(f, 4, 53, 40, 31, GREEN_PRIMARY);
+    fill(f, 44, 53, 40, 31, WHITE_PRIMARY);
+    fill(f, 84, 53, 40, 31, RED_PRIMARY);
+
+    // Labels refer to what the image *requests*, not measured optical output.
+    small(f, "G", 21, 88, WHITE);
+    small(f, "W", 61, 88, WHITE);
+    small(f, "R", 101, 88, WHITE);
+
+    small(f, "L/R: TRY MODE", 6, 99, WHITE);
+    small(f, "CLICK: APPLY", 6, 108, GREEN);
+    fill(f, 0, 116, 128, 12, PANEL);
+    small(f, "HOLD K1+K2: CANCEL", 6, 118, AMBER);
+
 }
