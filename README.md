@@ -18,8 +18,8 @@ Somatic Runtime (out of scope) ---> host telemetry adapter (future)
 
 * `crates/pulse-protocol`: `no_std` fixed-size binary telemetry frame v1, CRC-16/CCITT-FALSE.
 * `crates/pulse-core`: host-side link and loop-progress observer with tests.
-* `crates/pulse-bridge`: synthetic telemetry demo, **not yet connected to real Somatic Runtime or USB**.
-* `firmware/pico-w`: separate Embassy Rust workspace for the Seengreat 1.44-inch Rev 1.2 **local bring-up**, initially without USB telemetry.
+* `crates/pulse-bridge`: synthetic offline demo and **candidate** USB CDC serial-demo with explicit device-path and HELLO handshake. No real Somatic Runtime integration.
+* `firmware/pico-w`: separate Embassy Rust workspace for the Seengreat 1.44-inch Rev 1.2 LCD, keys and candidate USB CDC.
 * `hardware/boards/`: verified vendor pin mappings, revision and limitations.
 
 ## Host-side quick start
@@ -33,7 +33,7 @@ cargo run -p pulse-bridge -- demo 8
 
 ## Pico W bring-up
 
-See [firmware/pico-w/README.md](firmware/pico-w/README.md). This firmware draws a local demo screen and tests 4 keys and 5-way joystick. The first flash requires physical confirmation of board orientation and inspection of the soldering. Power only by **Pico Micro-USB**, disconnected from Paky-01 power/motors.
+See [firmware/pico-w/README.md](firmware/pico-w/README.md) and [PULSE-0.1C USB bench guide](docs/PULSE-0.1C-USB-BENCH.md). All nine inputs and the LCD startup were operator-verified on 2026-10-24; CDC operation still requires physical testing. Power only by **Pico Micro-USB**, disconnected from Paky-01 power/motors.
 
 ## Repository authority
 
@@ -43,7 +43,7 @@ See [firmware/pico-w/README.md](firmware/pico-w/README.md). This firmware draws 
 * Synthesized telemetry is never represented as measured loop performance.
 * The Pico is informational only; no motor control, calibration writing, actuator flashing or safety override.
 
-## Planned waves
+## USB CDC prototype (candidate)\n\n```sh\n# Explicit port path, verified by udevadm. Never guess ttyACM0 on Paky-01.\ncargo run -p pulse-bridge -- serial-demo /dev/serial/by-path/YOUR_PICO_PATH 20\n```\n\nOnly frames marked `DemoTicks` are transmitted, never real motor commands.\n\n## Planned waves
 
 PULSE-0.1A protocol + synthetic host; PULSE-0.1B LCD/buttons hardware bring-up; PULSE-0.1C USB CDC bridge; PULSE-0.2 Chronoscope timeline. Contract promotion and canonical registration need separate review and PRs.
 
