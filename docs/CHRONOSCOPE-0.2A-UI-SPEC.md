@@ -35,21 +35,23 @@ Schematic illustrates the **wide physical module**, not a wider LCD: the display
 - All typography, chart axes, indicators, chronological direction and gestures refer to **the logical operator view**, regardless of raw native GPIO orientation.
 - Both UI and main 5-inch Console should use the same meaning for UP/DOWN, LEFT/RIGHT in their controls. A K1–K4 press always changes the top-level page, never triggers motion.
 
-### Orientation-aware joystick mapping (proposed, physically verify)
+### Orientation-aware joystick mapping — superseded by Input Lab physical observations (2026-10-24)
 
-From the previously documented vendor GPIO directions when the board is upright in portrait: joystick raw LEFT=GP16, RIGHT=GP17, UP=GP19, DOWN=GP20, CENTER=GP18. Rotating the front-view hardware **clockwise 90°** changes the operator-facing directions:
+The first `PULSE-0.2A` design projected the GPIO map from the vendor's portrait pinout; **that projection was not correct for the assembled, landscape-mounted device**. The operator has now used the local `PULSE-0.2C INPUT LAB` raw GPIO view to report the physical controls:
 
-| Operator gesture in final landscape | Raw board direction | Pico GPIO |
-|---|---|---|
-| UP | Original LEFT | GP16 |
-| DOWN | Original RIGHT | GP17 |
-| LEFT | Original DOWN | GP20 |
-| RIGHT | Original UP | GP19 |
-| CLICK | CENTER (unchanged) | GP18 |
+| Operator gesture with joystick LEFT / keys RIGHT | GPIO reported by Input Lab | Raw key index | Logical Rust action |
+|---|---|---:|---|
+| UP | **GP18** | 7 | Up |
+| DOWN | **GP20** | 5 | Down |
+| LEFT | **GP16** | 4 | Left |
+| RIGHT | **GP19** | 8 | Right |
+| CLICK | **GP17** | 6 | Click |
 
-Use one central `raw_gpio -> logical_button` transform before UI navigation. Existing input verification established **each of 9 raw controls works**, not that the direction semantics in this new orientation have already been physically verified. Test all four joystick directions again when this layout is flashed.
+**Anomalous GP17/GP18 assignment:** compared with the vendor's nominal right/center labeling, operator-reported GP18 as UP and GP17 as CLICK are surprising. They are treated as **operator evidence** and implemented as a candidate software mapping, not as a claim of a hardware pinout revision. Both must be independently rechecked after flashing before acceptance.
 
-Buttons: K1=GP8, K2=GP4, K3=GP3, K4=GP2; keep the direct page mapping, now in a physical top-to-bottom row at the **right of the display**.
+Implementation principle: sample GPIO levels *unaltered* in `firmware/pico-w/src/main.rs` and convert raw key index to `pulse_ui::Action` only in `landscape_action`. Diagnostic Input Lab continues to show the actual raw pin alongside the interpreted action. Never conflate the two.
+
+Buttons K1=GP8, K2=GP4, K3=GP3, K4=GP2 remain unchanged and were reported working correctly. No K key or joystick gesture controls motors.
 
 ## Mandatory direct access — the four buttons
 
@@ -170,7 +172,7 @@ Debounce inputs and ensure K1..K4 always escape overlays. No joystick input can 
 ## Orientation design decision
 
 - **LOCKED (operator request 2026-10-24):** Chronoscope HMI is physically landscape, joystick **LEFT**, four keys **RIGHT**; physically rotate the board +90° clockwise from the vendor portrait view, and compensate graphics -90° in native pixel coordinates (or equivalent validated MADCTL rotation), so content is upright.
-- Hardware test gate: verify physical clockwise mounting, K1..K4 top-to-bottom, calibrated MADCTL and raw-to-logical joystick axes before claiming the landscape implementation is complete.
+- Hardware test gate: physical INPUT LAB results now document the raw joystick map (GP18 UP, GP20 DOWN, GP16 LEFT, GP19 RIGHT, GP17 CLICK), but **GP17/GP18 and full UI behavior must be checked post-remap**. K1..K4 top-to-bottom and 0x60 LCD orientation remain separately verified by operator evidence or need explicit checks.
 
 ## 0.2B implementation proposal (stacked branch)
 
