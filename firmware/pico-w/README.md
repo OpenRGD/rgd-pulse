@@ -34,12 +34,28 @@ To recheck the mapping, **hold K1 + K4 for about 1.2 seconds** to enter a *local
 
 See [PULSE-0.2C INPUT LAB BENCH](../../docs/PULSE-0.2C-INPUT-LAB-BENCH.md) for a reproducible five-direction test and a concise report format. This mode sends **no hardware, CAN or actuator commands**, and has no remote USB control endpoints.
 
+## PULSE-0.2D — Scroll acceleration and skins (candidate)
+
+Built-in **Winamp-inspired skin switcher** on the 128×128 Chronoscope. No new hardware controls and no change to GPIO mapping. Normal K1–K4 pages and the operator-approved physical joystick directions are preserved.
+
+- **Hold K2 + K3 together for at least 1.2 seconds** to open **SETTINGS → SKINS**.
+- Joystick **UP/DOWN or LEFT/RIGHT** cycles four fully local, instant-preview skins: **RGD Classic**, **Phosphor** (green oscilloscope), **Chrome 99** (metallic late-1990s), **Italia** (subtle green/white/red accent).
+- Joystick **CLICK** applies the preview and returns to the normal pages. Hold **K2+K3** again to **cancel** without applying.
+- The selected skin stays active on all four dashboards **until the Pico loses power or reboots**. It is **RAM-only** in this wave; we do not write RP2040 firmware flash or claim the skin is persisted in the Console. A future, separately accepted settings adapter may sync the stable skin key to persistent host preferences.
+- Hold the joystick in a direction for **440ms** to begin autorepeat; repetition accelerates from 240ms to 155ms after 1.6s, to 100ms after 3s. K1–K4 and joystick **CLICK never autorepeat**.
+- A tiny letter+counter in the top bar acknowledges each navigation event, including when list/zoom bounds prevent movement.
+- Existing **K1+K4** Input Lab remains accessible and uses high-contrast Classic coloring.
+
+Four pages, visual `DEMO` labels, real vs synthetic provenance, USB CDC `HELLO / DEMO / CRC ACK` and no-motion safety boundaries are unchanged. Original skin accents **never recolor warning/danger semantics**.
+
+See [PULSE-0.2D skins/navigation spec](../../docs/PULSE-0.2D-SKINS-NAVIGATION.md). Current implementation remains a **software candidate** until a physical Pico test verifies settings chords, acceleration and USB regression.
+
 ## Compile and flash
 
 ```bash
 cd ~/openrgd/rgd-pulse
 git fetch origin
-git switch feat/pulse-0.2c-input-lab
+git switch feat/pulse-0.2d-navigation-skins
 git pull --ff-only
 cargo test --workspace
 
