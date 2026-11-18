@@ -4,6 +4,7 @@
 //! No motion commands exist. A receiver must never infer physical safety from a frame.
 
 pub mod imu_wire;
+pub mod system_wire;
 
 pub const FRAME_LEN: usize = 18;
 pub const VERSION: u8 = 1;
