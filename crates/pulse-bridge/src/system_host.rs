@@ -43,17 +43,24 @@ fn parse_ram_used_pct(raw: &str) -> Result<u8, &'static str> {
             continue;
         }
         let mut parts = data.split_whitespace();
-        let value = parts.next().ok_or("empty meminfo value")?
-            .parse::<u64>().map_err(|_| "invalid meminfo value")?;
+        let value = parts
+            .next()
+            .ok_or("empty meminfo value")?
+            .parse::<u64>()
+            .map_err(|_| "invalid meminfo value")?;
         if parts.next() != Some("kB") || parts.next().is_some() {
             return Err("unexpected /proc/meminfo unit");
         }
         match key {
             "MemTotal" => {
-                if total.replace(value).is_some() { return Err("duplicate MemTotal"); }
+                if total.replace(value).is_some() {
+                    return Err("duplicate MemTotal");
+                }
             }
             "MemAvailable" => {
-                if available.replace(value).is_some() { return Err("duplicate MemAvailable"); }
+                if available.replace(value).is_some() {
+                    return Err("duplicate MemAvailable");
+                }
             }
             _ => unreachable!(),
         }
@@ -69,8 +76,12 @@ fn parse_ram_used_pct(raw: &str) -> Result<u8, &'static str> {
 }
 
 fn parse_health_http(raw: &str) -> bool {
-    let Some((head, body)) = raw.split_once("\r\n\r\n") else { return false };
-    let Some(first) = head.lines().next() else { return false };
+    let Some((head, body)) = raw.split_once("\r\n\r\n") else {
+        return false;
+    };
+    let Some(first) = head.lines().next() else {
+        return false;
+    };
     if first != "HTTP/1.1 200 OK" && first != "HTTP/1.0 200 OK" {
         return false;
     }
@@ -104,14 +115,18 @@ fn console_health_ok() -> bool {
             Err(_) => return false,
         }
     }
-    let Ok(response) = std::str::from_utf8(&buf[..length]) else { return false };
+    let Ok(response) = std::str::from_utf8(&buf[..length]) else {
+        return false;
+    };
     parse_health_http(response)
 }
 
 /// A sample may only be called on the actual Linux host outside Docker.
 /// Values are measured here; never inferred from Console robot snapshots.
 fn host_snapshot(seq: u32) -> Result<Snapshot, Box<dyn Error>> {
-    if seq == 0 { return Err("host status sequence cannot be zero".into()); }
+    if seq == 0 {
+        return Err("host status sequence cannot be zero".into());
+    }
     let uptime = parse_uptime_seconds(&fs::read_to_string("/proc/uptime")?)?;
     let ram = parse_ram_used_pct(&fs::read_to_string("/proc/meminfo")?)?;
     Ok(Snapshot {
@@ -126,8 +141,14 @@ fn host_snapshot(seq: u32) -> Result<Snapshot, Box<dyn Error>> {
 pub fn preview() -> Result<(), Box<dyn Error>> {
     let data = host_snapshot(1)?;
     println!("PULSE-0.4A HOST PREVIEW / ACTUAL LOCAL LINUX / NO USB / NO ACTUATION");
-    println!("host_uptime={}s ram_used={}%", data.host_uptime_s, data.ram_used_percent);
-    println!("console_healthz_verified={} (NOT ROBOT READY)", data.console_health_ok);
+    println!(
+        "host_uptime={}s ram_used={}%",
+        data.host_uptime_s, data.ram_used_percent
+    );
+    println!(
+        "console_healthz_verified={} (NOT ROBOT READY)",
+        data.console_health_ok
+    );
     println!("motors=N/A can=N/A drive_voltage=N/A");
     Ok(())
 }
@@ -150,7 +171,11 @@ fn expect_pico_hello(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
                     }
                 }
             }
-            Err(e) if matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => {}
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) => {}
             Err(e) => return Err(Box::new(e)),
         }
     }
@@ -171,7 +196,11 @@ fn require_sys_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error
                     }
                 }
             }
-            Err(e) if matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) => {}
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) => {}
             Err(e) => return Err(Box::new(e)),
         }
     }
@@ -209,13 +238,19 @@ pub fn run(port_path: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
         port.write_all(&system_wire::encode(SystemFrame::Snapshot(snapshot)))?;
         sent = sequence;
         if sent <= 3 || sent % 10 == 0 {
-            println!("K4 HOST #{} uptime={}s RAM={}%, Console /healthz {} (ROBOT I/O N/A)",
-                sent, snapshot.host_uptime_s, snapshot.ram_used_percent,
-                if snapshot.console_health_ok { "OK" } else { "N/A" });
+            println!(
+                "K4 HOST #{} uptime={}s RAM={}%, Console /healthz {} (ROBOT I/O N/A)",
+                sent,
+                snapshot.host_uptime_s,
+                snapshot.ram_used_percent,
+                if snapshot.console_health_ok {
+                    "OK"
+                } else {
+                    "N/A"
+                }
+            );
         }
-        if let Some(wait) =
-            (t0 + Duration::from_secs(1)).checked_duration_since(Instant::now())
-        {
+        if let Some(wait) = (t0 + Duration::from_secs(1)).checked_duration_since(Instant::now()) {
             thread::sleep(wait);
         }
     }
@@ -248,9 +283,16 @@ mod tests {
     fn console_health_has_strict_local_json_identity() {
         let good = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"ok\":true,\"api_version\":\"console.v1\",\"actuation_enabled\":false}";
         assert!(parse_health_http(good));
-        assert!(!parse_health_http(&good.replace("200 OK", "503 Unavailable")));
-        assert!(!parse_health_http(&good.replace("\"ok\":true", "\"ok\":false")));
-        assert!(!parse_health_http(&good.replace("\"actuation_enabled\":false", "\"actuation_enabled\":true")));
+        assert!(!parse_health_http(
+            &good.replace("200 OK", "503 Unavailable")
+        ));
+        assert!(!parse_health_http(
+            &good.replace("\"ok\":true", "\"ok\":false")
+        ));
+        assert!(!parse_health_http(&good.replace(
+            "\"actuation_enabled\":false",
+            "\"actuation_enabled\":true"
+        )));
         assert!(!parse_health_http("HTTP/1.1 200 OK\r\n\r\n<html>ok</html>"));
     }
 }
