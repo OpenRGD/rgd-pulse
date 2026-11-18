@@ -86,7 +86,11 @@ pub fn decode(raw: &[u8]) -> Result<Frame, Error> {
             if raw[4..16].iter().any(|b| *b != 0) {
                 return Err(Error::Flags);
             }
-            Ok(if raw[3] == 1 { Frame::Probe } else { Frame::ProbeAck })
+            Ok(if raw[3] == 1 {
+                Frame::Probe
+            } else {
+                Frame::ProbeAck
+            })
         }
         3 => {
             if raw[4] != FLAG_OBSERVED_LINUX_HOST {
@@ -98,9 +102,7 @@ pub fn decode(raw: &[u8]) -> Result<Frame, Error> {
             }
             Ok(Frame::Snapshot(Snapshot {
                 sequence: seq,
-                host_uptime_s: u32::from_le_bytes([
-                    raw[10], raw[11], raw[12], raw[13],
-                ]),
+                host_uptime_s: u32::from_le_bytes([raw[10], raw[11], raw[12], raw[13]]),
                 ram_used_percent: raw[14],
                 console_health_ok: raw[15] == 1,
             }))
@@ -124,7 +126,10 @@ impl Default for Decoder {
 
 impl Decoder {
     pub const fn new() -> Self {
-        Self { buffer: [0; FRAME_LEN], len: 0 }
+        Self {
+            buffer: [0; FRAME_LEN],
+            len: 0,
+        }
     }
 
     pub fn reset(&mut self) {
@@ -208,8 +213,12 @@ mod tests {
         let mut good = 0;
         for b in bad.into_iter().chain(encode(Frame::Snapshot(sample()))) {
             if let Some(result) = dec.push(b) {
-                if result.is_err() { errors += 1; }
-                if result == Ok(Frame::Snapshot(sample())) { good += 1; }
+                if result.is_err() {
+                    errors += 1;
+                }
+                if result == Ok(Frame::Snapshot(sample())) {
+                    good += 1;
+                }
             }
         }
         assert_eq!((errors, good), (1, 1));
@@ -249,10 +258,7 @@ mod tests {
         for b in old.into_iter().chain(imu) {
             assert!(sys.push(b).is_none());
         }
-        assert_eq!(
-            encode(Frame::Probe)[..2],
-            [b'S', b'Y']
-        );
+        assert_eq!(encode(Frame::Probe)[..2], [b'S', b'Y']);
     }
 
     #[test]
