@@ -29,6 +29,7 @@ use panic_halt as _;
 use pulse_protocol::{
     encode,
     imu_wire::{self, Decoder as ImuDecoder, Frame as ImuFrame},
+    system_wire::{self, Decoder as SystemDecoder, Frame as SystemFrame},
     Frame, Kind, StreamDecoder,
 };
 use pulse_ui::{
@@ -41,6 +42,7 @@ use pulse_ui::{
     landscape_action,
     settings::Settings,
     skins::SkinId,
+    system::{HostSnapshot, HostStatus, SystemView},
     UiState,
 };
 use preferences_store::PreferencesStore;
@@ -157,6 +159,10 @@ async fn main(spawner: Spawner) {
     let mut imu_negotiated = false; // Must receive explicit Probe before real frames
     let mut imu_view = ImuView::new();
     let mut last_imu_status = ImuStatus::NoSource;
+    let mut system_decoder = SystemDecoder::new(); // Independent PULSE/SYS-1
+    let mut system_negotiated = false; // Per-DTR-session explicit Probe required
+    let mut system_view = SystemView::new(); // Host uptime/RAM/Console only
+    let mut last_system_status = HostStatus::NoSource;
     let mut rx_packet = [0u8; 64];
     let mut usb_connected = false;
     let mut last_demo_ms: Option<u64> = None;
@@ -177,6 +183,9 @@ async fn main(spawner: Spawner) {
                 imu_decoder.reset();
                 imu_negotiated = false;
                 imu_view.clear();
+                system_decoder.reset();
+                system_negotiated = false;
+                system_view.clear();
                 last_demo_ms = None;
                 last_demo_sequence = None;
                 needs_draw = true;
@@ -190,6 +199,9 @@ async fn main(spawner: Spawner) {
                     imu_decoder.reset();
                     imu_negotiated = false;
                     imu_view.clear();
+                    system_decoder.reset();
+                    system_negotiated = false;
+                    system_view.clear();
                     last_demo_ms = None;
                     last_demo_sequence = None;
                     let hello = encode(Frame {
@@ -235,6 +247,9 @@ async fn main(spawner: Spawner) {
                                         imu_decoder.reset();
                                         imu_negotiated = false;
                                         imu_view.clear();
+                                        system_decoder.reset();
+                                        system_negotiated = false;
+                                        system_view.clear();
                                         last_demo_ms = None;
                                         last_demo_sequence = None;
                                         break;
@@ -267,6 +282,9 @@ async fn main(spawner: Spawner) {
                                         usb_connected = false;
                                         imu_negotiated = false;
                                         imu_view.clear();
+                                        system_decoder.reset();
+                                        system_negotiated = false;
+                                        system_view.clear();
                                         break;
                                     }
                                 }
@@ -307,6 +325,40 @@ async fn main(spawner: Spawner) {
                                 }
                             }
                         }
+
+                        // PULSE/SYS-1 never overlaps the original RP/IMU
+                        // messages and only accepts typed, non-actuating host
+                        // status after the current CDC session's SYS Probe.
+                        if let Some(Ok(packet)) = system_decoder.push(byte) {
+                            match packet {
+                                SystemFrame::Probe => {
+                                    let response = system_wire::encode(SystemFrame::ProbeAck);
+                                    if cdc.write_packet(&response).await.is_ok() {
+                                        system_negotiated = true;
+                                    } else {
+                                        usb_connected = false;
+                                        system_negotiated = false;
+                                        system_view.clear();
+                                        break;
+                                    }
+                                }
+                                SystemFrame::Snapshot(sample) if system_negotiated => {
+                                    let observation = HostSnapshot {
+                                        sequence: sample.sequence,
+                                        uptime_s: sample.host_uptime_s,
+                                        ram_used_percent: sample.ram_used_percent,
+                                        console_health_ok: sample.console_health_ok,
+                                    };
+                                    if system_view.observe(
+                                        observation,
+                                        Instant::now().as_millis(),
+                                    ).is_ok() {
+                                        needs_draw |= ui.page == pulse_ui::Page::System;
+                                    }
+                                }
+                                SystemFrame::Snapshot(_) | SystemFrame::ProbeAck => {}
+                            }
+                        }
                     }
                 }
                 Either::First(Err(_)) => {
@@ -317,6 +369,9 @@ async fn main(spawner: Spawner) {
                     imu_decoder.reset();
                     imu_negotiated = false;
                     imu_view.clear();
+                    system_decoder.reset();
+                    system_negotiated = false;
+                    system_view.clear();
                     needs_draw = true;
                 }
                 Either::Second(()) => {}
@@ -347,6 +402,16 @@ async fn main(spawner: Spawner) {
         if new_imu_status != last_imu_status {
             last_imu_status = new_imu_status;
             if ui.page == pulse_ui::Page::Imu {
+                needs_draw = true;
+            }
+        }
+
+        // A host-status frame is only fresh while new observations arrive.
+        // No source and STALE are not equivalent to robot readiness.
+        let new_system_status = system_view.status(now_ms);
+        if new_system_status != last_system_status {
+            last_system_status = new_system_status;
+            if ui.page == pulse_ui::Page::System {
                 needs_draw = true;
             }
         }
@@ -487,7 +552,7 @@ async fn main(spawner: Spawner) {
                     demo_sequence: last_demo_sequence.unwrap_or(0),
                     invalid_frames,
                 };
-                render::render(&mut image, &ui, &info, &imu_view, now_ms);
+                render::render(&mut image, &ui, &info, &imu_view, &system_view, now_ms);
             }
             lcd.flush_rgb565(image.data);
             needs_draw = false;
