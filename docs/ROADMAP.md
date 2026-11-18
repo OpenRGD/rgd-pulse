@@ -16,7 +16,9 @@
 | PULSE-0.3B | Console WS -> Rust Pulse Bridge -> USB PULSE/IMU-1 -> K3 real IMU sensor-frame values | **Physical PASS 2026-10-27** on 0.3C Pico: PULSE/1 HELLO, PULSE/IMU-1 PROBE/ACK, real K3 readings and RAW→STALE on publisher stop. Console null-after-TTL and end-run counts not separately captured; sensor axes remain uncalibrated. |
 | PULSE-0.3C | Pico skin/last-K-page persistence (2×4KiB CRC flash journal), on-device PREFS/LCD diagnostics, default X=1 Y=2 | **Physical PASS 2026-10-27**: Italia+K3 restored; LCD/colours clean; 100/100 synthetic USB ACK with 0 unexpected. IMU source integration is a separate PULSE-0.3B acceptance. |
 | PULSE-0.2F (remaining) | Other real telemetry adapters | Paky-01 IMU K3 fan-out delivered by 0.3B/0.3C. K1 SOMATIC, K2 Chronons and K4 SYSTEM source adapters still require separate review. |
-| PULSE-0.4 (proposed) | Read-only host/peripheral K4 SYSTEM first, then other source adapters | Strict source identity, missing-data N/A, authenticated operator boundary where needed; new PR + new physical acceptance. |
+| PULSE-0.4A (Draft PR #12) | K4 host Ubuntu uptime + RAM, Console /healthz status via PULSE/SYS-1 | Source-only candidate; CI and physical Pico bench independently required; CAN/motor/power N/A and no concurrent imu-live/system-live. |
+| PULSE-0.4B (planned) | One host-owned, multiplexed USB CDC bridge for K3 IMU + K4 SYSTEM | No duplicate Pico/WIT serial owners, separate freshness, legacy PULSE/1 regression, real operator acceptance. |
+| PULSE-0.4C (planned) | Additional approved robot telemetry sources | Only real source-backed CAN/motor/power metrics; all unsupported values stay N/A, no robot control. |
 
 ## Skin engine design gate (2026-10-24)
 
