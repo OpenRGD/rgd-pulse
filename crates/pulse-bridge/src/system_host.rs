@@ -14,6 +14,7 @@ use std::{
     fs,
     io::{self, Read, Write},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream},
+    path::Path,
     thread,
     time::{Duration, Instant},
 };
@@ -121,11 +122,24 @@ fn console_health_ok() -> bool {
     parse_health_http(response)
 }
 
+/// Refuse known containers: process-visible /proc is not unambiguous evidence
+/// of the physical Ubuntu mini-PC host in a container namespace.
+fn in_known_container() -> bool {
+    Path::new("/.dockerenv").exists()
+        || Path::new("/run/.containerenv").exists()
+        || fs::read_to_string("/proc/1/cgroup")
+            .map(|v| v.contains("/docker/") || v.contains("/kubepods/") || v.contains("/libpod/"))
+            .unwrap_or(false)
+}
+
 /// A sample may only be called on the actual Linux host outside Docker.
 /// Values are measured here; never inferred from Console robot snapshots.
 fn host_snapshot(seq: u32) -> Result<Snapshot, Box<dyn Error>> {
     if seq == 0 {
         return Err("host status sequence cannot be zero".into());
+    }
+    if in_known_container() {
+        return Err("container runtime detected: run this only on the physical Ubuntu host".into());
     }
     let uptime = parse_uptime_seconds(&fs::read_to_string("/proc/uptime")?)?;
     let ram = parse_ram_used_pct(&fs::read_to_string("/proc/meminfo")?)?;
@@ -213,10 +227,18 @@ pub fn run(port_path: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
     if !(1..=600).contains(&seconds) {
         return Err("duration must be 1..600 seconds".into());
     }
-    if !port_path.starts_with("/dev/serial/by-id/usb-OpenRGD_RGD_Pulse_Pico_W_")
-        || !port_path.ends_with("-if00")
-    {
+    const PREFIX: &str = "/dev/serial/by-id/usb-OpenRGD_RGD_Pulse_Pico_W_";
+    const SUFFIX: &str = "-if00";
+    if !port_path.starts_with(PREFIX) || !port_path.ends_with(SUFFIX) {
         return Err("exact Pico CDC by-id required; never guess ttyACM0 or open WIT serial".into());
+    }
+    let id = &port_path[PREFIX.len()..port_path.len() - SUFFIX.len()];
+    if id.is_empty()
+        || !id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        return Err("Pico CDC identity is malformed; no nested paths or traversal".into());
     }
     // Confirm host metrics before taking exclusive ownership of Pico USB.
     let _first = host_snapshot(1)?;
