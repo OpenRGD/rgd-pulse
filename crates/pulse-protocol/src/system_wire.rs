@@ -219,17 +219,20 @@ mod tests {
     fn fail_closed_on_bad_provenance_and_values() {
         let mut raw = encode(Frame::Snapshot(sample()));
         raw[4] = 0;
-        raw[16..18].copy_from_slice(&crc16_ccitt_false(&raw[..16]).to_le_bytes());
+        let checksum = crc16_ccitt_false(&raw[..16]);
+        raw[16..18].copy_from_slice(&checksum.to_le_bytes());
         assert_eq!(decode(&raw), Err(Error::Flags));
 
         raw = encode(Frame::Snapshot(sample()));
         raw[14] = 101;
-        raw[16..18].copy_from_slice(&crc16_ccitt_false(&raw[..16]).to_le_bytes());
+        let checksum = crc16_ccitt_false(&raw[..16]);
+        raw[16..18].copy_from_slice(&checksum.to_le_bytes());
         assert_eq!(decode(&raw), Err(Error::InvalidSample));
 
         raw = encode(Frame::Snapshot(sample()));
         raw[15] = 2;
-        raw[16..18].copy_from_slice(&crc16_ccitt_false(&raw[..16]).to_le_bytes());
+        let checksum = crc16_ccitt_false(&raw[..16]);
+        raw[16..18].copy_from_slice(&checksum.to_le_bytes());
         assert_eq!(decode(&raw), Err(Error::InvalidSample));
     }
 
