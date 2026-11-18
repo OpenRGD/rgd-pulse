@@ -644,10 +644,18 @@ fn render_system(
                     );
                     small(
                         f,
-                        if valid { "LINUX HOST / OBS" } else { "HOST SAMPLE STALE" },
+                        if info.usb == UsbState::Disconnected {
+                            "PICO CDC N/A"
+                        } else {
+                            "PICO CDC OPEN"
+                        },
                         6,
                         90,
-                        if valid { CYAN } else { AMBER },
+                        if info.usb == UsbState::Disconnected {
+                            MUTED
+                        } else {
+                            GREEN
+                        },
                     );
                 }
                 _ => {
@@ -727,9 +735,6 @@ fn render_system(
             }
         }
     }
-    // Pico CDC is measured locally and intentionally separate from host
-    // /healthz, physical CAN, actuators and drive voltage.
-    let _usb_observed = info.usb != UsbState::Disconnected;
 }
 
 pub fn render(
