@@ -89,3 +89,29 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) and [hardware/boards/seengreat-pico-144-r
 The Chronoscope can now **restore the applied skin and last K1–K4 page from an append-only two-sector flash journal** on a standard 2MiB RP2040 Pico W. This is deliberately separate from live IMU telemetry. Records are 256 bytes with CRC; malformed/torn records fall back to the most recent confirmed record or Classic/K1. The validated color mode (NORM/BGR) remains the constant boot default, not a saved theme selection. A write is deferred until >=3s idle and >=15s after a previous write, and is suspended while USB CDC DTR is active. Preferences changed immediately before unplugging may not be saved.
 
 **Physical hardware PASS:** operator restored Italia + K3 IMU after full power removal and after the final update; the LCD boots perfectly aligned at X=1/Y=2 and with validated colors. USB CDC recorded 100/100 CRC ACK and zero unexpected frames, plus the live IMU/STALE behavior. See [release evidence](docs/RELEASE-PULSE-0.3C.md), [0.3C persistence bench](docs/PULSE-0.3C-PERSISTENT-PREFERENCES-BENCH.md) and `scripts/check-pulse-uf2-prefs.py` before any reflash. This uses the last 8KiB of the verified 2MiB RP2040 flash; never use on an unknown board/flash chip, RP2350 or a mass-erase recovery routine if preferences must be preserved.
+
+## PULSE-0.4A (draft): source-backed K4 SYSTEM host telemetry
+
+Development continues only on the new feature branch; the accepted 0.3C
+firmware/source freeze remains unchanged.
+
+The 0.4A K4 candidate introduces an independent CRC-checked SYS-1 channel
+for physical Ubuntu host uptime and RAM consumption, plus fixed local
+Console /healthz process availability. K4 clearly reports motor-online,
+CAN and drive voltage as N/A until an actual read-only source is reviewed.
+The 2.5s host data timeout prevents a stalled sender from looking fresh.
+
+On the **actual mini-PC outside Docker** (source-only preflight):
+
+    cargo test --workspace
+    cargo fmt --all -- --check
+    cargo run -p pulse-bridge -- system-preview
+
+The separate system-live CLI can forward these snapshots to an explicitly
+identified Pico CDC **only after 0.4A firmware is built, CI-green and
+physically accepted**. It cannot run simultaneously with the existing
+imu-live or serial-demo processes because they each own the same Pico CDC
+device. Combined K3+K4 streaming requires a later single multiplexed bridge.
+No CAN, WIT serial, power sensors, motor authority or remote control exists.
+
+See [PULSE-0.4A K4 source, transport and physical bench](docs/PULSE-0.4A-K4-SYSTEM-READONLY.md).

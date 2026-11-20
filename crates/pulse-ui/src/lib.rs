@@ -14,6 +14,7 @@ pub mod preferences;
 pub mod preferences_journal;
 pub mod settings;
 pub mod skins;
+pub mod system;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
