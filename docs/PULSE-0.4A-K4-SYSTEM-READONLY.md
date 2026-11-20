@@ -66,12 +66,43 @@ Do not load new UF2 until host and Pico CI green and verified hardware test cond
 
 ## Acceptance gates
 
-- [ ] Host unit tests and rustfmt green
-- [ ] Pico release build, BOOT2/vector checks and protected-flash gates green
-- [ ] SYS corruption/magic/flags/bounds/replay/freshness tests green
-- [ ] Local physical mini-PC Linux source preflight (outside Docker)
+- [x] Host unit tests and rustfmt green (GitHub Actions 4/4 green on `e25dbce3`)
+- [x] Pico CI release build, BOOT2/vector checks and protected-flash gates green (local UF2 check still pending)
+- [x] SYS corruption/magic/flags/bounds/replay/freshness unit tests green
+- [x] Physical mini-PC Ubuntu Linux source preflight via `system-preview` — operator 2026-11-20
 - [ ] Real Pico SYS Probe/ACK, K4 uptime/memory and Console process status
 - [ ] STALE/N/A stop test and full previous 0.3C regression
 - [ ] Separate v0.4B multiplex design before concurrent K3+K4
 
 CRC is not authentication. This only validates a trusted local prototype connection; it does not establish secure remote controls or motor safety. Never infer CAN, drive voltage or actual Somatic loop health from kernel uptime, API health, USB DTR or a configured motor inventory.
+
+
+## Physical Ubuntu host preflight — 20 November 2026
+
+**PASS (operator report, no Pico or sensor serial opened).**
+
+The user completed the host-only `cargo run -p pulse-bridge -- system-preview`
+on Paky-01's Ubuntu mini-PC, yielding:
+
+```text
+PULSE-0.4A HOST PREVIEW / ACTUAL LOCAL LINUX / NO USB / NO ACTUATION
+host_uptime=266613s ram_used=37%
+console_healthz_verified=true (NOT ROBOT READY)
+motors=N/A can=N/A drive_voltage=N/A
+=== HOST PREFLIGHT COMPLETE ===
+```
+
+This confirms local Linux `/proc/uptime` and `/proc/meminfo` parsing and
+a successful validation of the fixed `127.0.0.1:8088/healthz` response.
+The source represents physical host OS observations and Console process
+reachability, **not** actual motor/CAN/voltage states or robot readiness.
+
+Additional evidence: the current source head `e25dbce3f50b67030c1ce02c14d3e16a49d857bb`
+has 4/4 successful GitHub Actions host/pico jobs; host tests and formatting,
+Pico release ELF, BOOT2/vector and partition checks all passed.
+
+**Not yet done:** local UF2 build/guard, protected preference-journal backup,
+explicit BOOTSEL physical flash, K4 on-device visuals, SYS capability/ACK,
+K4 STALE/N/A, K3 regression and 100/100 PULSE/1 ACK after flashing.
+The existing physically accepted 0.3C firmware and frozen source branch
+remain unchanged by this host-only test.
