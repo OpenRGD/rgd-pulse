@@ -29,7 +29,7 @@ use panic_halt as _;
 use pulse_protocol::{
     encode,
     imu_wire::{self, Decoder as ImuDecoder, Frame as ImuFrame},
-    system_wire::{self, Decoder as SystemDecoder, Frame as SystemFrame},
+    system_wire::{self, Decoder as SystemDecoder, Frame as SystemFrame, PageHint},
     Frame, Kind, StreamDecoder,
 };
 use pulse_ui::{
@@ -64,6 +64,9 @@ async fn usb_task(mut usb: MyUsbDevice) -> ! {
 const PROTOTYPE_BOARD_ID: u32 = 1;
 const DEMO_STALE_AFTER_MS: u64 = 900;
 const BUTTON_DEBOUNCE_MS: u64 = 140;
+// Local K-page hints are sent only after an opt-in SYS SubscribePage.
+// Never interpreted as robot commands, never stored in flash.
+const PAGE_HINT_HEARTBEAT_MS: u64 = 1_500;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -161,6 +164,10 @@ async fn main(spawner: Spawner) {
     let mut last_imu_status = ImuStatus::NoSource;
     let mut system_decoder = SystemDecoder::new(); // Independent PULSE/SYS-1
     let mut system_negotiated = false; // Per-DTR-session explicit Probe required
+    let mut page_watch_enabled = false; // Host explicitly subscribed to UI page
+    let mut page_hint_sent_at: Option<u64> = None;
+    let mut page_hint_last_page: Option<pulse_ui::Page> = None;
+    let mut page_hint_sequence: u32 = 0;
     let mut system_view = SystemView::new(); // Host uptime/RAM/Console only
     let mut last_system_status = HostStatus::NoSource;
     let mut rx_packet = [0u8; 64];
@@ -185,6 +192,9 @@ async fn main(spawner: Spawner) {
                 imu_view.clear();
                 system_decoder.reset();
                 system_negotiated = false;
+                page_watch_enabled = false;
+                page_hint_sent_at = None;
+                page_hint_last_page = None;
                 system_view.clear();
                 last_demo_ms = None;
                 last_demo_sequence = None;
@@ -201,6 +211,9 @@ async fn main(spawner: Spawner) {
                     imu_view.clear();
                     system_decoder.reset();
                     system_negotiated = false;
+                    page_watch_enabled = false;
+                    page_hint_sent_at = None;
+                    page_hint_last_page = None;
                     system_view.clear();
                     last_demo_ms = None;
                     last_demo_sequence = None;
@@ -249,6 +262,9 @@ async fn main(spawner: Spawner) {
                                         imu_view.clear();
                                         system_decoder.reset();
                                         system_negotiated = false;
+                                        page_watch_enabled = false;
+                                        page_hint_sent_at = None;
+                                        page_hint_last_page = None;
                                         system_view.clear();
                                         last_demo_ms = None;
                                         last_demo_sequence = None;
@@ -284,6 +300,9 @@ async fn main(spawner: Spawner) {
                                         imu_view.clear();
                                         system_decoder.reset();
                                         system_negotiated = false;
+                                        page_watch_enabled = false;
+                                        page_hint_sent_at = None;
+                                        page_hint_last_page = None;
                                         system_view.clear();
                                         break;
                                     }
@@ -338,6 +357,9 @@ async fn main(spawner: Spawner) {
                                     } else {
                                         usb_connected = false;
                                         system_negotiated = false;
+                                        page_watch_enabled = false;
+                                        page_hint_sent_at = None;
+                                        page_hint_last_page = None;
                                         system_view.clear();
                                         break;
                                     }
@@ -356,7 +378,18 @@ async fn main(spawner: Spawner) {
                                         needs_draw |= ui.page == pulse_ui::Page::System;
                                     }
                                 }
-                                SystemFrame::Snapshot(_) | SystemFrame::ProbeAck => {}
+                                SystemFrame::SubscribePage if system_negotiated => {
+                                    // No page navigation is requested by host; just
+                                    // opt in to lightweight local page announcements.
+                                    page_watch_enabled = true;
+                                    page_hint_sent_at = None;
+                                    page_hint_last_page = None;
+                                    page_hint_sequence = 0;
+                                }
+                                SystemFrame::SubscribePage
+                                | SystemFrame::PageHint(_)
+                                | SystemFrame::Snapshot(_)
+                                | SystemFrame::ProbeAck => {}
                             }
                         }
                     }
@@ -371,6 +404,9 @@ async fn main(spawner: Spawner) {
                     imu_view.clear();
                     system_decoder.reset();
                     system_negotiated = false;
+                    page_watch_enabled = false;
+                    page_hint_sent_at = None;
+                    page_hint_last_page = None;
                     system_view.clear();
                     needs_draw = true;
                 }
@@ -501,6 +537,35 @@ async fn main(spawner: Spawner) {
             }
         }
         previous_mask = mask;
+
+        // Announce the page only to an explicitly subscribed USB peer.
+        // No unnecessary writes when old system-live / imu-live clients run.
+        // Repeat at low frequency to recover from lost/fragmented frames.
+        if usb_connected && cdc.dtr() && system_negotiated && page_watch_enabled {
+            let due = page_hint_sent_at
+                .map(|last| now_ms.saturating_sub(last) >= PAGE_HINT_HEARTBEAT_MS)
+                .unwrap_or(true);
+            if page_hint_last_page != Some(ui.page) || due {
+                page_hint_sequence = page_hint_sequence.wrapping_add(1).max(1);
+                let hint = system_wire::encode(SystemFrame::PageHint(PageHint {
+                    sequence: page_hint_sequence,
+                    page: ui.page as u8,
+                }));
+                if cdc.write_packet(&hint).await.is_ok() {
+                    page_hint_sent_at = Some(now_ms);
+                    page_hint_last_page = Some(ui.page);
+                } else {
+                    usb_connected = false;
+                    system_negotiated = false;
+                    page_watch_enabled = false;
+                    page_hint_sent_at = None;
+                    page_hint_last_page = None;
+                    imu_view.clear();
+                    system_view.clear();
+                    needs_draw = true;
+                }
+            }
+        }
 
         // Persist only APPLIED skin and selected K-page, never menu previews,
         // focus/zoom, synthetic telemetry or any sensor observation. A stable
