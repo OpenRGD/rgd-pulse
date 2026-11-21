@@ -2,8 +2,11 @@
 //! Magic "SY" prevents confusion with PULSE/1 "RP" and PULSE/IMU-1 "IM".
 //! Fixed 18-byte, CRC16-CCITT-FALSE LE frame; never a motor/CAN command.
 //!
-//! 0..2 magic SY; 2 version=1; 3 kind (1 Probe / 2 ProbeAck / 3 Sample)
-//! 4 flags (Sample: 0x01 Linux host measurement); 5 reserved=0
+//! 0..2 magic SY; 2 version=1; 3 kind (1 Probe / 2 ProbeAck /
+//! 3 Sample / 4 SubscribePage / 5 PageHint)
+//! 4 flags (Sample: 0x01 Linux host measurement; PageHint: 0x02);
+//! 5 reserved=0; PageHint: seq LE at 6..10, K-page 0..3 at byte 10,
+//! remaining 11..15 zero. SubscribePage is all-zero payload.
 //! 6..10 sequence u32 LE; 10..14 Linux host uptime seconds u32 LE
 //! 14 physical host RAM used percent (0..100, MemTotal-MemAvailable)
 //! 15 Console API health: 0 unavailable/unverified, 1 validated /healthz
@@ -16,6 +19,7 @@ pub const FRAME_LEN: usize = 18;
 pub const VERSION: u8 = 1;
 const MAGIC: [u8; 2] = *b"SY";
 const FLAG_OBSERVED_LINUX_HOST: u8 = 0x01;
+const FLAG_UI_PAGE: u8 = 0x02;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Snapshot {
@@ -25,11 +29,23 @@ pub struct Snapshot {
     pub console_health_ok: bool,
 }
 
+/// Local Pico UI page announcement. No sensitive or robot-control data.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PageHint {
+    pub sequence: u32,
+    /// 0 SOMATIC; 1 CHRONONS; 2 IMU; 3 SYSTEM.
+    pub page: u8,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Frame {
     Probe,
     ProbeAck,
     Snapshot(Snapshot),
+    /// Host asks Pico for current-page reports, never a navigation command.
+    SubscribePage,
+    /// Pico reports local current page to avoid forwarding invisible telemetry.
+    PageHint(PageHint),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -51,6 +67,13 @@ pub fn encode(frame: Frame) -> [u8; FRAME_LEN] {
     match frame {
         Frame::Probe => out[3] = 1,
         Frame::ProbeAck => out[3] = 2,
+        Frame::SubscribePage => out[3] = 4,
+        Frame::PageHint(hint) => {
+            out[3] = 5;
+            out[4] = FLAG_UI_PAGE;
+            out[6..10].copy_from_slice(&hint.sequence.to_le_bytes());
+            out[10] = hint.page;
+        }
         Frame::Snapshot(sample) => {
             out[3] = 3;
             out[4] = FLAG_OBSERVED_LINUX_HOST;
@@ -82,15 +105,28 @@ pub fn decode(raw: &[u8]) -> Result<Frame, Error> {
         return Err(Error::Checksum);
     }
     match raw[3] {
-        1 | 2 => {
+        1 | 2 | 4 => {
             if raw[4..16].iter().any(|b| *b != 0) {
                 return Err(Error::Flags);
             }
-            Ok(if raw[3] == 1 {
-                Frame::Probe
-            } else {
-                Frame::ProbeAck
+            Ok(match raw[3] {
+                1 => Frame::Probe,
+                2 => Frame::ProbeAck,
+                _ => Frame::SubscribePage,
             })
+        }
+        5 => {
+            if raw[4] != FLAG_UI_PAGE || raw[11..16].iter().any(|b| *b != 0) {
+                return Err(Error::Flags);
+            }
+            let seq = u32::from_le_bytes([raw[6], raw[7], raw[8], raw[9]]);
+            if seq == 0 || raw[10] > 3 {
+                return Err(Error::InvalidSample);
+            }
+            Ok(Frame::PageHint(PageHint {
+                sequence: seq,
+                page: raw[10],
+            }))
         }
         3 => {
             if raw[4] != FLAG_OBSERVED_LINUX_HOST {
@@ -195,7 +231,13 @@ mod tests {
 
     #[test]
     fn probe_and_snapshot_roundtrip() {
-        for packet in [Frame::Probe, Frame::ProbeAck, Frame::Snapshot(sample())] {
+        for packet in [
+            Frame::Probe,
+            Frame::ProbeAck,
+            Frame::Snapshot(sample()),
+            Frame::SubscribePage,
+            Frame::PageHint(PageHint { sequence: 5, page: 2 }),
+        ] {
             let raw = encode(packet);
             assert_eq!(raw.len(), 18);
             assert_eq!(&raw[..2], b"SY");
@@ -259,6 +301,39 @@ mod tests {
             assert!(sys.push(b).is_none());
         }
         assert_eq!(encode(Frame::Probe)[..2], [b'S', b'Y']);
+    }
+
+
+    #[test]
+    fn subscribe_carries_no_implicit_navigation() {
+        let hint = Frame::PageHint(PageHint { sequence: 1, page: 3 });
+        assert_eq!(decode(&encode(hint)), Ok(hint));
+        let mut bad = encode(Frame::SubscribePage);
+        bad[6] = 1;
+        let crc = crc16_ccitt_false(&bad[..16]);
+        bad[16..18].copy_from_slice(&crc.to_le_bytes());
+        assert_eq!(decode(&bad), Err(Error::Flags));
+    }
+
+    #[test]
+    fn page_hint_is_bounded_and_requires_verified_flags() {
+        let mut raw = encode(Frame::PageHint(PageHint { sequence: 4, page: 1 }));
+        raw[10] = 4;
+        let crc = crc16_ccitt_false(&raw[..16]);
+        raw[16..18].copy_from_slice(&crc.to_le_bytes());
+        assert_eq!(decode(&raw), Err(Error::InvalidSample));
+
+        raw = encode(Frame::PageHint(PageHint { sequence: 4, page: 1 }));
+        raw[4] = 0;
+        let crc = crc16_ccitt_false(&raw[..16]);
+        raw[16..18].copy_from_slice(&crc.to_le_bytes());
+        assert_eq!(decode(&raw), Err(Error::Flags));
+
+        raw = encode(Frame::PageHint(PageHint { sequence: 4, page: 1 }));
+        raw[6..10].fill(0);
+        let crc = crc16_ccitt_false(&raw[..16]);
+        raw[16..18].copy_from_slice(&crc.to_le_bytes());
+        assert_eq!(decode(&raw), Err(Error::InvalidSample));
     }
 
     #[test]
