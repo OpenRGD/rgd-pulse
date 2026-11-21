@@ -12,8 +12,7 @@
 
 use crate::{
     console_imu::{self, StreamGuard},
-    imu_live,
-    system_host,
+    imu_live, system_host,
 };
 use pulse_protocol::{
     imu_wire::{self, Frame as ImuFrame},
@@ -190,7 +189,11 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
                     sys_sent,
                     observation.host_uptime_s,
                     observation.ram_used_percent,
-                    if observation.console_health_ok { "OK" } else { "N/A" },
+                    if observation.console_health_ok {
+                        "OK"
+                    } else {
+                        "N/A"
+                    },
                 );
             }
         }
@@ -238,9 +241,9 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
                             }
                             match console_imu::to_wire(sample) {
                                 Ok(wire) => {
-                                    port.write_all(
-                                        &imu_wire::encode(ImuFrame::SensorSample(wire)),
-                                    )?;
+                                    port.write_all(&imu_wire::encode(ImuFrame::SensorSample(
+                                        wire,
+                                    )))?;
                                     imu_sent = imu_sent.saturating_add(1);
                                     last_imu_tx = Some(Instant::now());
                                     if imu_sent <= 3 || imu_sent % 10 == 0 {
@@ -300,21 +303,51 @@ mod tests {
         let t0 = Instant::now();
         let mut page = PageLease::default();
         assert_eq!(page.current(t0), None);
-        assert!(page.observe(PageHint { sequence: 1, page: PAGE_IMU }, t0));
+        assert!(page.observe(
+            PageHint {
+                sequence: 1,
+                page: PAGE_IMU
+            },
+            t0
+        ));
         assert_eq!(page.current(t0), Some(PAGE_IMU));
         assert_eq!(page.current(t0 + PAGE_HINT_TTL), Some(PAGE_IMU));
-        assert_eq!(page.current(t0 + PAGE_HINT_TTL + Duration::from_millis(1)), None);
+        assert_eq!(
+            page.current(t0 + PAGE_HINT_TTL + Duration::from_millis(1)),
+            None
+        );
     }
 
     #[test]
     fn page_switch_only_changes_forwarding_policy() {
         let t0 = Instant::now();
         let mut page = PageLease::default();
-        page.observe(PageHint { sequence: 10, page: PAGE_IMU }, t0);
+        page.observe(
+            PageHint {
+                sequence: 10,
+                page: PAGE_IMU,
+            },
+            t0,
+        );
         assert_eq!(page.current(t0), Some(PAGE_IMU));
-        page.observe(PageHint { sequence: 11, page: PAGE_SYSTEM }, t0 + Duration::from_millis(10));
-        assert_eq!(page.current(t0 + Duration::from_millis(10)), Some(PAGE_SYSTEM));
-        page.observe(PageHint { sequence: 12, page: 0 }, t0 + Duration::from_millis(20));
+        page.observe(
+            PageHint {
+                sequence: 11,
+                page: PAGE_SYSTEM,
+            },
+            t0 + Duration::from_millis(10),
+        );
+        assert_eq!(
+            page.current(t0 + Duration::from_millis(10)),
+            Some(PAGE_SYSTEM)
+        );
+        page.observe(
+            PageHint {
+                sequence: 12,
+                page: 0,
+            },
+            t0 + Duration::from_millis(20),
+        );
         assert_eq!(page.current(t0 + Duration::from_millis(20)), Some(0));
     }
 
@@ -322,12 +355,30 @@ mod tests {
     fn rejects_replayed_hint_wrong_page_or_zero_sequence() {
         let mut page = PageLease::default();
         let t0 = Instant::now();
-        assert!(page.observe(PageHint { sequence: 5, page: 3 }, t0));
+        assert!(page.observe(
+            PageHint {
+                sequence: 5,
+                page: 3
+            },
+            t0
+        ));
         for bad in [
-            PageHint { sequence: 5, page: 2 },
-            PageHint { sequence: 4, page: 2 },
-            PageHint { sequence: 0, page: 3 },
-            PageHint { sequence: 6, page: 4 },
+            PageHint {
+                sequence: 5,
+                page: 2,
+            },
+            PageHint {
+                sequence: 4,
+                page: 2,
+            },
+            PageHint {
+                sequence: 0,
+                page: 3,
+            },
+            PageHint {
+                sequence: 6,
+                page: 4,
+            },
         ] {
             assert!(!page.observe(bad, t0));
         }
@@ -338,11 +389,35 @@ mod tests {
     fn page_seq_wrap_and_independent_rates() {
         let mut page = PageLease::default();
         let t0 = Instant::now();
-        assert!(page.observe(PageHint { sequence: u32::MAX, page: 2 }, t0));
-        assert!(page.observe(PageHint { sequence: 1, page: 3 }, t0));
-        assert!(!due(Some(t0), SYS_MIN_TX_INTERVAL, t0 + Duration::from_millis(999)));
-        assert!(due(Some(t0), SYS_MIN_TX_INTERVAL, t0 + Duration::from_secs(1)));
-        assert!(due(Some(t0), IMU_MIN_TX_INTERVAL, t0 + Duration::from_millis(100)));
+        assert!(page.observe(
+            PageHint {
+                sequence: u32::MAX,
+                page: 2
+            },
+            t0
+        ));
+        assert!(page.observe(
+            PageHint {
+                sequence: 1,
+                page: 3
+            },
+            t0
+        ));
+        assert!(!due(
+            Some(t0),
+            SYS_MIN_TX_INTERVAL,
+            t0 + Duration::from_millis(999)
+        ));
+        assert!(due(
+            Some(t0),
+            SYS_MIN_TX_INTERVAL,
+            t0 + Duration::from_secs(1)
+        ));
+        assert!(due(
+            Some(t0),
+            IMU_MIN_TX_INTERVAL,
+            t0 + Duration::from_millis(100)
+        ));
     }
 
     #[test]
