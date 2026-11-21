@@ -70,7 +70,7 @@ Do not load new UF2 until host and Pico CI green and verified hardware test cond
 - [x] Pico CI release build, BOOT2/vector checks and protected-flash gates green (local UF2 check still pending)
 - [x] SYS corruption/magic/flags/bounds/replay/freshness unit tests green
 - [x] Physical mini-PC Ubuntu Linux source preflight via `system-preview` — operator 2026-11-20
-- [ ] Real Pico SYS Probe/ACK, K4 uptime/memory and Console process status
+- [x] Real Pico K4 uptime/memory displayed correctly (operator; full SYS handshake logs and Console label verification not supplied)
 - [ ] STALE/N/A stop test and full previous 0.3C regression
 - [ ] Separate v0.4B multiplex design before concurrent K3+K4
 
@@ -106,3 +106,23 @@ explicit BOOTSEL physical flash, K4 on-device visuals, SYS capability/ACK,
 K4 STALE/N/A, K3 regression and 100/100 PULSE/1 ACK after flashing.
 The existing physically accepted 0.3C firmware and frozen source branch
 remain unchanged by this host-only test.
+
+## On-device K4 operator verification — 21 November 2026
+
+**Physical visual PASS (operator report):** following the PULSE-0.4A host-only
+preflight, the operator confirms that the Chronoscope K4 SYSTEM displays
+actual **Linux RAM used** and **host uptime** correctly. This demonstrates
+the new source-to-Pico UI path functionally on the assembled hardware.
+
+**Scope of evidence:** no complete `system-live` terminal transcript or
+explicit PULSE/SYS-1 Probe/ACK counter was supplied for this second test.
+The on-screen values require accepted SYS sample reception in the current
+implementation, but exact timing, elapsed seconds, loss, STALE/N/A behavior,
+or 100/100 USB and K3 IMU regressions **have not been independently
+documented yet**. Do not infer that Console HTTP probe was separately
+inspected on the LCD unless reported.
+
+The physically accepted PULSE-0.3C release source remains frozen and
+unmodified. For PULSE-0.4B, use one host process and one Pico USB CDC
+session to avoid running the independent `system-live` and `imu-live`
+programs concurrently.
