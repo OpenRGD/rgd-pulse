@@ -236,7 +236,10 @@ mod tests {
             Frame::ProbeAck,
             Frame::Snapshot(sample()),
             Frame::SubscribePage,
-            Frame::PageHint(PageHint { sequence: 5, page: 2 }),
+            Frame::PageHint(PageHint {
+                sequence: 5,
+                page: 2,
+            }),
         ] {
             let raw = encode(packet);
             assert_eq!(raw.len(), 18);
@@ -303,10 +306,12 @@ mod tests {
         assert_eq!(encode(Frame::Probe)[..2], [b'S', b'Y']);
     }
 
-
     #[test]
     fn subscribe_carries_no_implicit_navigation() {
-        let hint = Frame::PageHint(PageHint { sequence: 1, page: 3 });
+        let hint = Frame::PageHint(PageHint {
+            sequence: 1,
+            page: 3,
+        });
         assert_eq!(decode(&encode(hint)), Ok(hint));
         let mut bad = encode(Frame::SubscribePage);
         bad[6] = 1;
@@ -317,19 +322,28 @@ mod tests {
 
     #[test]
     fn page_hint_is_bounded_and_requires_verified_flags() {
-        let mut raw = encode(Frame::PageHint(PageHint { sequence: 4, page: 1 }));
+        let mut raw = encode(Frame::PageHint(PageHint {
+            sequence: 4,
+            page: 1,
+        }));
         raw[10] = 4;
         let crc = crc16_ccitt_false(&raw[..16]);
         raw[16..18].copy_from_slice(&crc.to_le_bytes());
         assert_eq!(decode(&raw), Err(Error::InvalidSample));
 
-        raw = encode(Frame::PageHint(PageHint { sequence: 4, page: 1 }));
+        raw = encode(Frame::PageHint(PageHint {
+            sequence: 4,
+            page: 1,
+        }));
         raw[4] = 0;
         let crc = crc16_ccitt_false(&raw[..16]);
         raw[16..18].copy_from_slice(&crc.to_le_bytes());
         assert_eq!(decode(&raw), Err(Error::Flags));
 
-        raw = encode(Frame::PageHint(PageHint { sequence: 4, page: 1 }));
+        raw = encode(Frame::PageHint(PageHint {
+            sequence: 4,
+            page: 1,
+        }));
         raw[6..10].fill(0);
         let crc = crc16_ccitt_false(&raw[..16]);
         raw[16..18].copy_from_slice(&crc.to_le_bytes());
