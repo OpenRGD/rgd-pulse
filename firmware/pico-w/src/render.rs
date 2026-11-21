@@ -26,6 +26,7 @@ use pulse_ui::{
     landscape_action,
     settings::Settings,
     skins::{ChromeStyle, SkinId},
+    system::{HostStatus, SystemView},
     Action, Mode, Page, UiState,
 };
 
@@ -272,7 +273,14 @@ fn demo_chart(f: &mut Frame<'_>, x: i32, y: i32, w: u32, h: u32, state: &UiState
     }
 }
 
-fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData, imu: &ImuView, now_ms: u64) {
+fn top_bar(
+    f: &mut Frame<'_>,
+    ui: &UiState,
+    state: &RenderData,
+    imu: &ImuView,
+    system: &SystemView,
+    now_ms: u64,
+) {
     fill(f, 0, 0, 128, 16, PANEL);
     fill(f, 0, 15, 128, 1, CYAN);
     if f.skin == SkinId::Italia {
@@ -313,9 +321,15 @@ fn top_bar(f: &mut Frame<'_>, ui: &UiState, state: &RenderData, imu: &ImuView, n
         fill(f, 80, 2, 17, 11, BORDER);
         small(f, &event, 83, 4, WHITE);
     }
-    // Only the K3 IMU page may report real physical measurements.
-    // Other pages are still fixtures, even when the USB link is active.
-    let (data_badge, data_color) = if ui.page == Page::Imu {
+    // K3 has real sensor axes; K4 can report host Linux fields ONLY.
+    // K1/K2 and all non sourced robot I/O remain DEMO/unknown.
+    let (data_badge, data_color) = if ui.page == Page::System {
+        match system.status(now_ms) {
+            HostStatus::Fresh => ("HOST", GREEN),
+            HostStatus::Stale => ("STALE", AMBER),
+            HostStatus::NoSource => ("N/A", MUTED),
+        }
+    } else if ui.page == Page::Imu {
         match imu.status(now_ms) {
             ImuStatus::FreshSensorAxes => ("RAW", GREEN),
             ImuStatus::Stale => ("STALE", AMBER),
@@ -584,59 +598,98 @@ fn render_imu(f: &mut Frame<'_>, ui: &UiState, imu: &ImuView, now_ms: u64) {
     }
 }
 
-fn render_system(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
-    let rows = ["MOTORS", "CAN BUS", "POWER", "HOST USB"];
-    let data = [
-        "22 CFG / ON --",
-        "NO BUS DATA",
-        "DRIVE --.- V",
-        "CDC STATUS",
-    ];
+fn render_system(
+    f: &mut Frame<'_>,
+    ui: &UiState,
+    info: &RenderData,
+    system: &SystemView,
+    now_ms: u64,
+) {
+    // K4 is intentionally mixed-provenance: only HOST is sourced from Linux.
+    // Neither a connected USB link nor healthy Console implies motor readiness.
+    let rows = ["MOTORS", "CAN BUS", "POWER", "HOST LINUX"];
+    let state = system.status(now_ms);
+    let host = system.latest();
     let i = ui.selected() as usize;
     if ui.mode == Mode::Focus {
         small(f, "SYSTEM / INSPECT", 5, 20, CYAN);
         big(f, rows[i], 6, 34, WHITE);
         if i == 3 {
-            big(
-                f,
-                if info.usb == UsbState::Disconnected {
-                    "OFF"
-                } else {
-                    "LINK"
-                },
-                6,
-                53,
-                GREEN,
-            );
+            match (state, host) {
+                (HostStatus::Fresh | HostStatus::Stale, Some(data)) => {
+                    let valid = state == HostStatus::Fresh;
+                    let color = if valid { GREEN } else { MUTED };
+                    let mut value: String<32> = String::new();
+                    let _ = write!(value, "RAM {}%", data.ram_used_percent);
+                    small(f, &value, 6, 52, color);
+                    value.clear();
+                    let _ = write!(value, "UPTIME {}s", data.uptime_s);
+                    small(f, &value, 6, 65, color);
+                    small(
+                        f,
+                        if valid && data.console_health_ok {
+                            "CONSOLE HTTP OK"
+                        } else if !valid {
+                            "CONSOLE STALE"
+                        } else {
+                            "CONSOLE N/A"
+                        },
+                        6,
+                        78,
+                        if valid && data.console_health_ok {
+                            GREEN
+                        } else {
+                            AMBER
+                        },
+                    );
+                    small(
+                        f,
+                        if info.usb == UsbState::Disconnected {
+                            "PICO CDC N/A"
+                        } else {
+                            "PICO CDC OPEN"
+                        },
+                        6,
+                        90,
+                        if info.usb == UsbState::Disconnected {
+                            MUTED
+                        } else {
+                            GREEN
+                        },
+                    );
+                }
+                _ => {
+                    small(f, "HOST SOURCE N/A", 6, 52, AMBER);
+                    small(f, "NO VERIFIED LINUX DATA", 6, 68, MUTED);
+                    small(f, "CONSOLE N/A", 6, 82, MUTED);
+                }
+            }
         } else {
             big(
                 f,
                 match i {
-                    0 => "22 CFG",
-                    1 => "--",
+                    0 => "N/A",
+                    1 => "N/A",
                     _ => "--.- V",
                 },
                 6,
                 53,
-                CYAN,
+                MUTED,
             );
+            small(
+                f,
+                match i {
+                    0 => "MOTOR ONLINE UNKNOWN",
+                    1 => "CAN SOURCE NOT CONNECTED",
+                    _ => "NO PHYSICAL VOLT SENSOR",
+                },
+                5,
+                76,
+                AMBER,
+            );
+            small(f, "OBSERVATION ONLY", 5, 90, MUTED);
         }
-        small(
-            f,
-            if i == 0 {
-                "ONLINE: UNKNOWN"
-            } else if i == 1 {
-                "CAN: UNOBSERVED"
-            } else if i == 2 {
-                "VOLTAGE: NO SENSOR"
-            } else {
-                "USB ONLY / NO MOTOR"
-            },
-            5,
-            76,
-            AMBER,
-        );
-        small(f, "L/R: NEXT  CLICK: BACK", 5, 95, MUTED);
+        small(f, "L/R NEXT  CLICK BACK", 5, 101, MUTED);
         return;
     }
 
@@ -649,25 +702,33 @@ fn render_system(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
         }
         small(f, rows[index], 9, y + 3, if active { WHITE } else { MUTED });
         if index == 3 {
+            let mut value: String<32> = String::new();
+            match (state, host) {
+                (HostStatus::Fresh, Some(data)) => {
+                    let _ = write!(value, "RAM {}%  UP {}s", data.ram_used_percent, data.uptime_s);
+                    small(f, &value, 9, y + 11, GREEN);
+                }
+                (HostStatus::Stale, Some(_)) => {
+                    small(f, "HOST STALE", 9, y + 11, AMBER);
+                }
+                _ => {
+                    small(f, "LINUX N/A", 9, y + 11, MUTED);
+                }
+            }
+        } else {
             small(
                 f,
-                if info.usb == UsbState::Disconnected {
-                    "USB OFF"
-                } else {
-                    "USB ON"
+                match index {
+                    0 => "ONLINE N/A",
+                    1 => "BUS DATA N/A",
+                    _ => "DRIVE VOLT N/A",
                 },
                 9,
                 y + 11,
-                if info.usb == UsbState::Disconnected {
-                    RED
-                } else {
-                    GREEN
-                },
+                MUTED,
             );
-        } else {
-            small(f, data[index], 9, y + 11, AMBER);
         }
-        // Segmented motor reference inventory is a reference, NOT an online test.
+        // Decorative inventory count is not an actual motor-online signal.
         if index == 0 {
             for n in 0..11 {
                 fill(f, 74 + n * 4, y + 3, 2, 3, MUTED);
@@ -676,14 +737,21 @@ fn render_system(f: &mut Frame<'_>, ui: &UiState, info: &RenderData) {
     }
 }
 
-pub fn render(f: &mut Frame<'_>, ui: &UiState, info: &RenderData, imu: &ImuView, now_ms: u64) {
+pub fn render(
+    f: &mut Frame<'_>,
+    ui: &UiState,
+    info: &RenderData,
+    imu: &ImuView,
+    system: &SystemView,
+    now_ms: u64,
+) {
     f.clear();
-    top_bar(f, ui, info, imu, now_ms);
+    top_bar(f, ui, info, imu, system, now_ms);
     match ui.page {
         Page::Somatic => render_somatic(f, ui),
         Page::Chronons => render_chronons(f, ui),
         Page::Imu => render_imu(f, ui, imu, now_ms),
-        Page::System => render_system(f, ui, info),
+        Page::System => render_system(f, ui, info, system, now_ms),
     }
     footer(f, ui, info);
 }

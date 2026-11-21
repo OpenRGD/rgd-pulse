@@ -1,6 +1,7 @@
 mod console_imu;
 mod imu_import;
 mod imu_live;
+mod system_host;
 
 use pulse_core::Observer;
 use pulse_protocol::{decode, encode, Frame, Kind, StreamDecoder};
@@ -16,7 +17,7 @@ const PROTOTYPE_BOARD_ID: u32 = 1;
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  pulse-bridge demo [count]\n  pulse-bridge serial-demo <explicit-port-path> [count]\n  pulse-bridge imu-preview <redacted-console-observation.json>\n  pulse-bridge imu-live <exact-pico-by-id-port> [seconds]"
+        "usage:\n  pulse-bridge demo [count]\n  pulse-bridge serial-demo <explicit-port-path> [count]\n  pulse-bridge imu-preview <redacted-console-observation.json>\n  pulse-bridge imu-live <exact-pico-by-id-port> [seconds]\n  pulse-bridge system-preview\n  pulse-bridge system-live <exact-pico-by-id-port> [seconds]"
     );
     process::exit(2);
 }
@@ -63,6 +64,18 @@ fn main() {
                 usage();
             }
             imu_live::run(&args[1], parse_count(args.get(2), 30) as u64)
+        }
+        Some("system-preview") => {
+            if args.len() != 1 {
+                usage();
+            }
+            system_host::preview()
+        }
+        Some("system-live") => {
+            if args.len() < 2 || args.len() > 3 {
+                usage();
+            }
+            system_host::run(&args[1], parse_count(args.get(2), 30) as u64)
         }
         _ => usage(),
     };
