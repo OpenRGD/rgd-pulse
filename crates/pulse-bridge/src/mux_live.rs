@@ -77,6 +77,14 @@ impl PageLease {
     }
 }
 
+fn imu_needed(page: Option<u8>) -> bool {
+    page == Some(PAGE_IMU)
+}
+
+fn system_needed(page: Option<u8>) -> bool {
+    page == Some(PAGE_SYSTEM)
+}
+
 fn due(last: Option<Instant>, interval: Duration, now: Instant) -> bool {
     last.and_then(|t| now.checked_duration_since(t))
         .map(|elapsed| elapsed >= interval)
@@ -171,13 +179,13 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
             // refresh, rather than waiting for the old page's send interval.
             last_imu_tx = None;
             last_sys_tx = None;
-            if previous_page == Some(PAGE_IMU) && active != Some(PAGE_IMU) {
+            if imu_needed(previous_page) && !imu_needed(active) {
                 ws = None; // drop local WS subscription: no unnecessary read
             }
             previous_page = active;
         }
 
-        if active == Some(PAGE_SYSTEM) && due(last_sys_tx, SYS_MIN_TX_INTERVAL, now) {
+        if system_needed(active) && due(last_sys_tx, SYS_MIN_TX_INTERVAL, now) {
             let seq = sys_sent.checked_add(1).ok_or("SYS sequence overflow")?;
             let observation = system_host::host_snapshot(seq)?;
             port.write_all(&system_wire::encode(SystemFrame::Snapshot(observation)))?;
@@ -200,7 +208,7 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
 
         // K1/K2/K4 never open or poll the Console IMU WS. IMU publisher
         // remains untouched and can still serve other Console subscribers.
-        if active != Some(PAGE_IMU) {
+        if !imu_needed(active) {
             ws = None;
             continue;
         }
@@ -316,6 +324,18 @@ mod tests {
             page.current(t0 + PAGE_HINT_TTL + Duration::from_millis(1)),
             None
         );
+    }
+
+    #[test]
+    fn inactive_or_expired_pages_produce_no_host_or_imu_work() {
+        for page in [None, Some(0), Some(1)] {
+            assert!(!imu_needed(page));
+            assert!(!system_needed(page));
+        }
+        assert!(imu_needed(Some(PAGE_IMU)));
+        assert!(!system_needed(Some(PAGE_IMU)));
+        assert!(!imu_needed(Some(PAGE_SYSTEM)));
+        assert!(system_needed(Some(PAGE_SYSTEM)));
     }
 
     #[test]
