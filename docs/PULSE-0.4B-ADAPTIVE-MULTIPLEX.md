@@ -83,11 +83,72 @@ Do **not** flash until host + Pico CI, UF2 protection and physical device identi
 - [ ] Host tests and format; page hint CRC, invalid page, replay/timeout, source-selection tests.
 - [ ] Pico BOOT2/vector and flash partition compile gates.
 - [ ] Local UF2 address map below `0x101FE000`.
-- [ ] Host physical resource usage measured under K1/K2, K3, K4 (CPU, memory, file handles); distinguish IMU publisher vs Pulse Bridge processes.
-- [ ] Physical K3↔K4 switch with **one** Pico serial handle and real source observations.
+- [ ] Per-page CPU/memory and fd baselines measured separately; preliminary single mux-live process snapshot: 0.3% CPU, 3864 KiB RSS (22 Nov). No publisher comparison yet.
+- [x] Physical K1↔K4 page hints and real K4 Linux RAM/uptime/Console in one Pico CDC process (22 Nov). K3 **WebSocket subscription only** verified; no forwarded IMU sample line in supplied logs.
 - [ ] Disconnected/STALE regressions and PULSE/1 20/20+100/100 CRC ACK.
 - [ ] No motor/CAN commands, no container-as-host metrics, no untrusted "healthy robot" claims.
 
 ## Future always-on deployment
 
 After the complete physical acceptance, operate **one** managed host service for the multiplexed bridge with bounded restart/backoff and strict device identity, no sudo and no duplicate serial ownership. Do not auto-install or auto-enable in this candidate. Source acquisition (publisher) remains a separate, explicit service with its own lifecycle. No control surface should automatically start motors or sensors.
+
+## Physical adaptive mux bench — 22 November 2026
+
+**Operator-reported functional PASS for USB negotiation, page selection and K4 data.**
+The actual mini-PC `pulse-bridge mux-live` process was observed at elapsed
+`01:36` (within a bounded 120s session), using:
+
+```text
+PID 134989   %CPU 0.3   RSS 3864 KiB   ELAPSED 01:36
+PULSE/1 HELLO OK
+PULSE/IMU-1 PROBE/ACK OK
+PULSE/SYS-1 PROBE/ACK OK
+PULSE/SYS-1 page subscription requested (Pico decides current K page)
+Adaptive policy: K3 IMU only when viewed, K4 Linux at 1Hz when viewed
+PICO VIEW = K4
+K4 HOST #1 uptime=430645s RAM=42% Console /healthz=OK
+K4 HOST #2 uptime=430646s RAM=42% Console /healthz=OK
+K4 HOST #3 uptime=430647s RAM=42% Console /healthz=OK
+PICO VIEW = K1
+PICO VIEW = K2
+PICO VIEW = K3
+Console read-only WS subscribed (K3 visible)
+PICO VIEW = K4
+K4 HOST #10 uptime=430665s RAM=41% Console /healthz=OK
+K4 HOST #20 uptime=430675s RAM=42% Console /healthz=OK
+PICO VIEW = K1
+PICO VIEW = K2
+PICO VIEW = K3
+Console read-only WS subscribed (K3 visible)
+PICO VIEW = K4
+K4 HOST #30 uptime=430692s RAM=41% Console /healthz=OK
+K4 HOST #40 uptime=430703s RAM=41% Console /healthz=OK
+PICO VIEW = K1
+PICO VIEW = K2
+PICO VIEW = K3
+Console read-only WS subscribed (K3 visible)
+```
+
+**Proven by this captured output:** three independent protocol negotiation
+responses accepted; Pico-to-host page hints received for all four K pages;
+read-only Console WS subscription initiated only for K3; K4 host Linux
+uptime/RAM and `/healthz` sampled and forwarded; one Pulse Bridge process
+remained active throughout the observed page switching. No concurrent Pico
+serial reader is reported.
+
+**Observed resource sample:** `%CPU 0.3` and `RSS 3864 KiB` (~3.77 MiB)
+at elapsed `01:36`. This is a **single process snapshot**, not a controlled
+per-page utilization comparison or proof of 24/7 stability. PID is session
+ephemeral, not a contractual device identity.
+
+**Open gates:** The pasted trace shows K3 WS subscriptions but **no**
+`K3 IMU #... forwarded` lines. Therefore real IMU sample delivery in
+`mux-live` remains **UNVERIFIED**; the separately managed IMU publisher
+may have been stopped. Test a fresh Console IMU GET while K3 is visible,
+then inspect bridge IMU summary. The trace does not include the final
+`PULSE MUX SUMMARY`, a controlled source-stop `STALE/N/A` test, or
+post-update `PULSE/1` serial-demo 20/100 ACK regressions. Do not merge
+0.4B until these are addressed.
+
+No claims of measured motor/CAN/drive voltage or motion readiness.
+The accepted 0.3C source rollback branch is unchanged.
