@@ -14,3 +14,5 @@ jobs:
         run: cargo test --workspace
       - name: Format host workspace
         run: cargo fmt --all -- --check
+      - name: Validate Pulse K3 source readiness guard (offline)
+        run: python3 -m unittest discover -s scripts -p 'test_pulse_mux_imu_preflight.py' -v
