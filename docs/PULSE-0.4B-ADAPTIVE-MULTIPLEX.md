@@ -152,3 +152,84 @@ post-update `PULSE/1` serial-demo 20/100 ACK regressions. Do not merge
 
 No claims of measured motor/CAN/drive voltage or motion readiness.
 The accepted 0.3C source rollback branch is unchanged.
+
+
+## PULSE-0.4B.1 — K3 source readiness & reproducible regression (25 Nov 2026)
+
+**Scope of changes:** host Pulse Bridge diagnostics, read-only Console GET
+preflight and offline tests only. The firmware already installed in the
+Pico from the prior 0.4B test does **not** need to be reflashed for these
+changes. `PULSE/1`, `PULSE/IMU-1`, `PULSE/SYS-1` wire frames, Pico
+flash, hardware ownership, and the 0.3C rollback branch are unchanged.
+
+### Why K3 showed a WebSocket but no IMU lines
+
+The 22 Nov log proves the Console WS was **connected**, not that the
+publisher had sent a fresh real IMU observation. No `K3 IMU #...` or
+`PULSE MUX SUMMARY` was supplied. The missing publisher is a plausible
+cause, **not verified root cause**; first inspect Console's physical
+observation GET and whether the sole WIT/CH340 reader is running.
+
+The mux now distinguishes:
+- `Console WS ... awaiting physical samples`: subscriber connection only;
+- `K3 IMU #...`: an accepted real Console sample sent over Pico USB;
+- `K3 NO VERIFIED IMU SAMPLES after 4s`: K3 displayed without any
+  accepted sample; warns once per K3 visit, does not auto-start publisher;
+- `PULSE MUX SUMMARY ... K3_visits/N_empty/WS_imu_received/WS_connect_failures`:
+  helps distinguish no source, rejected samples, and forwarding.
+
+No source or failed validation automatically remains `STALE/N/A`, and K4
+keeps working. Changing pages cannot turn a Console health check into
+a sensor-health claim.
+
+### Read-only preflight (no Pico port opened)
+
+On the physical Ubuntu mini-PC, not in Docker:
+
+```bash
+cd ~/openrgd/worktrees/rgd-pulse-mux04b
+git fetch origin feat/pulse-0.4b-adaptive-multiplex
+git merge --ff-only origin/feat/pulse-0.4b-adaptive-multiplex
+python3 scripts/pulse_mux_imu_preflight.py
+```
+
+Expected: `IMU_CONSOLE_STATUS=FRESH_CONSOLE_OBSERVATION` followed by
+sequence and same-host observation age. A Console `null` yields
+`NO_FRESH_SOURCE`; invalid schema/source/time/robot/motion claims fail
+closed and exit nonzero. Preflight does **not** authenticate the WIT
+device independently and does not open sensor serial or change publisher
+lifecycle.
+
+If `NO_FRESH_SOURCE`, inspect the independently managed Paky-01 IMU
+publisher; do **not** spawn a second reader on CH340. Correct the
+source-lifecycle problem before claiming multiplex K3 PASS.
+
+### Bounded operator acceptance: K3 + K4 + PULSE/1
+
+```bash
+cd ~/openrgd/worktrees/rgd-pulse-mux04b
+bash scripts/pulse-mux-acceptance.sh
+```
+
+This script fails before USB use if the Console cannot supply a fresh
+claimed physical IMU observation; validates one by-id Pico CDC, refuses a
+busy serial device, runs one `mux-live` for 120 seconds and records logs
+in `~/openrgd/reports`. While running, select K3 for >=10s, then K4 for
+>=5s, K1 and K2, and K3 again. It requires *nonzero* real IMU and K4
+forwarding, actual K3/K4 page hints, and a final mux summary. Once
+mux-live has closed the Pico serial, it runs **sequential** synthetic
+20/20 and 100/100 PULSE/1 ACK regressions, with zero unexpected frames.
+
+This test **never flashes the Pico**, opens WIT/CH340, installs a
+service, starts a publisher, reads CAN, or issues motor commands. It is
+an operator physical test, not an unattended background process.
+
+Separate gates still remain: calibrated end-to-end rate/latency,
+publisher-stop `RAW→STALE`, cold-boot preference retention after 0.4B,
+long-run stability and a controlled per-page CPU/RAM comparison. Do not
+merge PR #12/#13 solely on the basis of passing unit tests, preflight,
+or one short mux session.
+
+**Reality Ingress note:** [Pulse PR #14](https://github.com/OpenRGD/rgd-pulse/pull/14)
+is coordination-only and does not alter this real IMU flow. RI evidence
+refs cannot be promoted to K3 physical samples or History/Chronons.
