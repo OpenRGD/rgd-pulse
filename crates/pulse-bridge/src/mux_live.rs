@@ -109,7 +109,8 @@ impl K3Evidence {
         if self.warned || sent != self.forwarded_at_entry {
             return false;
         }
-        let should_warn = self.entered
+        let should_warn = self
+            .entered
             .and_then(|since| now.checked_duration_since(since))
             .map(|elapsed| elapsed >= K3_NO_FORWARD_WARNING)
             .unwrap_or(false);
@@ -277,7 +278,9 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
         if ws.is_none() && now >= ws_retry_after {
             match imu_live::connect_console() {
                 Ok(socket) => {
-                    println!("Console read-only WS connected (K3 visible; awaiting physical samples)");
+                    println!(
+                        "Console read-only WS connected (K3 visible; awaiting physical samples)"
+                    );
                     ws = Some(socket);
                     source_guard = StreamGuard::default();
                 }
@@ -286,7 +289,9 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
                     // error bodies; K3 goes STALE/NO SOURCE as designed.
                     ws_connect_failures = ws_connect_failures.saturating_add(1);
                     if ws_connect_failures <= 2 {
-                        eprintln!("K3 Console WS unavailable; retrying locally (publisher untouched)");
+                        eprintln!(
+                            "K3 Console WS unavailable; retrying locally (publisher untouched)"
+                        );
                     }
                     ws_retry_after = Instant::now() + WS_RECONNECT_INTERVAL;
                 }
@@ -306,7 +311,8 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
                     ) {
                         Ok(Some((sample, source_ns))) => {
                             ws_imu_received = ws_imu_received.saturating_add(1);
-                            if let Err(reason) = source_guard.accept(sample, source_ns, host_now_ns) {
+                            if let Err(reason) = source_guard.accept(sample, source_ns, host_now_ns)
+                            {
                                 imu_rejected = imu_rejected.saturating_add(1);
                                 if imu_rejected <= 3 {
                                     eprintln!("K3 observation rejected by guard: {reason:?}");
@@ -404,9 +410,19 @@ mod tests {
         let mut evidence = K3Evidence::default();
         evidence.transition(Some(1), Some(PAGE_IMU), t0, 7);
         assert!(!evidence.warn_if_no_forward(t0 + Duration::from_secs(5), 8));
-        evidence.transition(Some(PAGE_IMU), Some(PAGE_SYSTEM), t0 + Duration::from_secs(6), 8);
+        evidence.transition(
+            Some(PAGE_IMU),
+            Some(PAGE_SYSTEM),
+            t0 + Duration::from_secs(6),
+            8,
+        );
         assert_eq!((evidence.visits, evidence.empty_visits), (1, 0));
-        evidence.transition(Some(PAGE_SYSTEM), Some(PAGE_IMU), t0 + Duration::from_secs(7), 8);
+        evidence.transition(
+            Some(PAGE_SYSTEM),
+            Some(PAGE_IMU),
+            t0 + Duration::from_secs(7),
+            8,
+        );
         evidence.finish(8);
         assert_eq!((evidence.visits, evidence.empty_visits), (2, 1));
     }
