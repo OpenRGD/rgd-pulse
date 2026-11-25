@@ -51,7 +51,7 @@ pub fn host_monotonic_ns() -> io::Result<u64> {
         .saturating_add(ts.tv_nsec as u64))
 }
 
-fn expect_pico_hello(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
+pub(crate) fn expect_pico_hello(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
     port.write_data_terminal_ready(false)?;
     thread::sleep(Duration::from_millis(300));
     port.write_data_terminal_ready(true)?;
@@ -80,7 +80,7 @@ fn expect_pico_hello(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
     Err("Pico PULSE/1 HELLO missing: abort IMU subscription without sending sensor data".into())
 }
 
-fn require_imu_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
+pub(crate) fn require_imu_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
     port.write_all(&imu_wire::encode(ImuFrame::Probe))?;
     let deadline = Instant::now() + Duration::from_secs(3);
     let mut decoder = ImuDecoder::new();
@@ -108,7 +108,7 @@ fn require_imu_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error
 
 /// Uses a fixed local WS endpoint only; never accepts arbitrary URLs to
 /// avoid SSRF/network disclosure and accidental LAN gateway exposure.
-fn connect_console(
+pub(crate) fn connect_console(
 ) -> Result<tungstenite::WebSocket<MaybeTlsStream<std::net::TcpStream>>, Box<dyn Error>> {
     let (mut socket, _) = tungstenite::connect(WS_STREAM_URL)?;
     match socket.get_mut() {

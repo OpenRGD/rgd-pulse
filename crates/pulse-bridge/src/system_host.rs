@@ -134,7 +134,7 @@ fn in_known_container() -> bool {
 
 /// A sample may only be called on the actual Linux host outside Docker.
 /// Values are measured here; never inferred from Console robot snapshots.
-fn host_snapshot(seq: u32) -> Result<Snapshot, Box<dyn Error>> {
+pub(crate) fn host_snapshot(seq: u32) -> Result<Snapshot, Box<dyn Error>> {
     if seq == 0 {
         return Err("host status sequence cannot be zero".into());
     }
@@ -196,7 +196,7 @@ fn expect_pico_hello(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
     Err("PULSE/1 HELLO missing; SYSTEM never sends samples to old/unknown firmware".into())
 }
 
-fn require_sys_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
+pub(crate) fn require_sys_capability(port: &mut dyn SerialPort) -> Result<(), Box<dyn Error>> {
     port.write_all(&system_wire::encode(SystemFrame::Probe))?;
     let mut decoder = system_wire::Decoder::new();
     let deadline = Instant::now() + Duration::from_secs(3);
