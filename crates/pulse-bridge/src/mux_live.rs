@@ -32,6 +32,7 @@ const IMU_MIN_TX_INTERVAL: Duration = Duration::from_millis(100);
 const SYS_MIN_TX_INTERVAL: Duration = Duration::from_secs(1);
 const WS_RECONNECT_INTERVAL: Duration = Duration::from_secs(3);
 const PICO_READ_TIMEOUT: Duration = Duration::from_millis(50);
+const K3_NO_FORWARD_WARNING: Duration = Duration::from_secs(4);
 const PAGE_IMU: u8 = 2;
 const PAGE_SYSTEM: u8 = 3;
 
@@ -73,6 +74,57 @@ impl PageLease {
             Some(page)
         } else {
             None
+        }
+    }
+}
+
+/// Counts each K3 visit independently, so a healthy USB/WebSocket
+/// handshake cannot be reported as successful physical IMU forwarding.
+#[derive(Default)]
+struct K3Evidence {
+    entered: Option<Instant>,
+    forwarded_at_entry: u32,
+    warned: bool,
+    visits: u32,
+    empty_visits: u32,
+}
+
+impl K3Evidence {
+    fn transition(&mut self, before: Option<u8>, after: Option<u8>, now: Instant, sent: u32) {
+        if imu_needed(before) && !imu_needed(after) {
+            if sent == self.forwarded_at_entry {
+                self.empty_visits = self.empty_visits.saturating_add(1);
+            }
+            self.entered = None;
+        }
+        if !imu_needed(before) && imu_needed(after) {
+            self.visits = self.visits.saturating_add(1);
+            self.entered = Some(now);
+            self.forwarded_at_entry = sent;
+            self.warned = false;
+        }
+    }
+
+    fn warn_if_no_forward(&mut self, now: Instant, sent: u32) -> bool {
+        if self.warned || sent != self.forwarded_at_entry {
+            return false;
+        }
+        let should_warn = self.entered
+            .and_then(|since| now.checked_duration_since(since))
+            .map(|elapsed| elapsed >= K3_NO_FORWARD_WARNING)
+            .unwrap_or(false);
+        if should_warn {
+            self.warned = true;
+        }
+        should_warn
+    }
+
+    fn finish(&mut self, sent: u32) {
+        if self.entered.is_some() {
+            if sent == self.forwarded_at_entry {
+                self.empty_visits = self.empty_visits.saturating_add(1);
+            }
+            self.entered = None;
         }
     }
 }
@@ -146,6 +198,9 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
     let mut imu_sent = 0u32;
     let mut sys_sent = 0u32;
     let mut imu_rejected = 0u32;
+    let mut ws_imu_received = 0u32;
+    let mut ws_connect_failures = 0u32;
+    let mut k3 = K3Evidence::default();
     let started = Instant::now();
     let deadline = started + Duration::from_secs(seconds);
 
@@ -175,12 +230,18 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
         let now = Instant::now();
         let active = page.current(now);
         if active != previous_page {
+            k3.transition(previous_page, active, now, imu_sent);
             // On each visible page transition give the new source a quick
             // refresh, rather than waiting for the old page's send interval.
             last_imu_tx = None;
             last_sys_tx = None;
             if imu_needed(previous_page) && !imu_needed(active) {
                 ws = None; // drop local WS subscription: no unnecessary read
+            }
+            if !imu_needed(previous_page) && imu_needed(active) {
+                // Re-entering K3 is an explicit fresh attempt; do not carry
+                // a prior, unrelated WebSocket reconnection backoff.
+                ws_retry_after = now;
             }
             previous_page = active;
         }
@@ -216,13 +277,17 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
         if ws.is_none() && now >= ws_retry_after {
             match imu_live::connect_console() {
                 Ok(socket) => {
-                    println!("Console read-only WS subscribed (K3 visible)");
+                    println!("Console read-only WS connected (K3 visible; awaiting physical samples)");
                     ws = Some(socket);
                     source_guard = StreamGuard::default();
                 }
                 Err(_) => {
                     // No secrets, arbitrary endpoints or verbose network
                     // error bodies; K3 goes STALE/NO SOURCE as designed.
+                    ws_connect_failures = ws_connect_failures.saturating_add(1);
+                    if ws_connect_failures <= 2 {
+                        eprintln!("K3 Console WS unavailable; retrying locally (publisher untouched)");
+                    }
                     ws_retry_after = Instant::now() + WS_RECONNECT_INTERVAL;
                 }
             }
@@ -240,8 +305,12 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
                         Origin::ConsoleReadOnlyObservation,
                     ) {
                         Ok(Some((sample, source_ns))) => {
-                            if source_guard.accept(sample, source_ns, host_now_ns).is_err() {
+                            ws_imu_received = ws_imu_received.saturating_add(1);
+                            if let Err(reason) = source_guard.accept(sample, source_ns, host_now_ns) {
                                 imu_rejected = imu_rejected.saturating_add(1);
+                                if imu_rejected <= 3 {
+                                    eprintln!("K3 observation rejected by guard: {reason:?}");
+                                }
                                 continue;
                             }
                             if !due(last_imu_tx, IMU_MIN_TX_INTERVAL, Instant::now()) {
@@ -269,8 +338,11 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
                             }
                         }
                         Ok(None) => {} // heartbeat, telemetry, non-IMU event
-                        Err(_) => {
+                        Err(reason) => {
                             imu_rejected = imu_rejected.saturating_add(1);
+                            if imu_rejected <= 3 {
+                                eprintln!("K3 Console observation rejected: {reason:?}");
+                            }
                         }
                     }
                 }
@@ -291,12 +363,19 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
             ws = None;
             ws_retry_after = Instant::now() + WS_RECONNECT_INTERVAL;
         }
+        if k3.warn_if_no_forward(Instant::now(), imu_sent) {
+            eprintln!(
+                "K3 NO VERIFIED IMU SAMPLES after 4s: WS connection is not sensor evidence; check sole publisher and Console GET /api/v1/robots/paky-01/imu"
+            );
+        }
     }
 
+    k3.finish(imu_sent);
     // Closing DTR drops both Pico live sessions; no stale live data remain.
     println!(
-        "PULSE MUX SUMMARY: IMU forwarded={} SYS forwarded={} rejected={} (source-only)",
-        imu_sent, sys_sent, imu_rejected,
+        "PULSE MUX SUMMARY: IMU forwarded={} SYS forwarded={} rejected={} K3_visits={} K3_empty={} WS_imu_received={} WS_connect_failures={} (source-only)",
+        imu_sent, sys_sent, imu_rejected, k3.visits, k3.empty_visits,
+        ws_imu_received, ws_connect_failures,
     );
     println!("No robot safety, CAN or motor state inferred.");
     Ok(())
@@ -305,6 +384,32 @@ pub fn run(serial_by_id: &str, seconds: u64) -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_imu_forwarding_has_separate_k3_evidence_and_warns_only_once() {
+        let t0 = Instant::now();
+        let mut evidence = K3Evidence::default();
+        evidence.transition(Some(3), Some(PAGE_IMU), t0, 0);
+        assert_eq!(evidence.visits, 1);
+        assert!(!evidence.warn_if_no_forward(t0 + Duration::from_millis(3_999), 0));
+        assert!(evidence.warn_if_no_forward(t0 + Duration::from_secs(4), 0));
+        assert!(!evidence.warn_if_no_forward(t0 + Duration::from_secs(5), 0));
+        evidence.transition(Some(PAGE_IMU), Some(0), t0 + Duration::from_secs(6), 0);
+        assert_eq!(evidence.empty_visits, 1);
+    }
+
+    #[test]
+    fn genuine_k3_forwarding_does_not_claim_an_empty_visit() {
+        let t0 = Instant::now();
+        let mut evidence = K3Evidence::default();
+        evidence.transition(Some(1), Some(PAGE_IMU), t0, 7);
+        assert!(!evidence.warn_if_no_forward(t0 + Duration::from_secs(5), 8));
+        evidence.transition(Some(PAGE_IMU), Some(PAGE_SYSTEM), t0 + Duration::from_secs(6), 8);
+        assert_eq!((evidence.visits, evidence.empty_visits), (1, 0));
+        evidence.transition(Some(PAGE_SYSTEM), Some(PAGE_IMU), t0 + Duration::from_secs(7), 8);
+        evidence.finish(8);
+        assert_eq!((evidence.visits, evidence.empty_visits), (2, 1));
+    }
 
     #[test]
     fn page_hints_are_required_and_expire_without_new_pico_observation() {
